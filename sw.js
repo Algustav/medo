@@ -1,12 +1,12 @@
-const CACHE_NAME = "medo-v4";
+const CACHE_NAME = "medo-v8";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./src/app.js?v=20260625f",
+  "./src/app.js?v=20260625j",
   "./src/store.js",
   "./src/ui/theme.js",
   "./src/ui/page-theme.js",
-  "./src/styles/app.css?v=20260625f"
+  "./src/styles/app.css?v=20260625j"
 ];
 
 self.addEventListener("install", event => {

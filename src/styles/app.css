@@ -88,7 +88,8 @@ textarea {
   border-radius: 8px;
   color: var(--text, #e6edf3);
   background: var(--key-bg, #0d1117);
-  padding: 10px 12px;
+  min-height: 42px;
+  padding: 9px 12px;
   outline: none;
 }
 
@@ -100,14 +101,13 @@ textarea:focus {
 }
 
 textarea {
-  min-height: 52px;
+  height: 42px;
+  min-height: 42px;
   resize: vertical;
 }
 
 .composer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  display: block;
   padding: 12px;
   border: 1px solid var(--line, #30363d);
   border-radius: 10px;
@@ -120,6 +120,55 @@ textarea {
   gap: 7px;
 }
 
+.tag-submit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(42px, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.tag-input-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.add-button {
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.tag-suggestions {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line, #30363d);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--panel, #161b22), var(--bg, #0d1117) 18%);
+  box-shadow: 0 14px 30px var(--shadow, rgba(1, 4, 9, .28));
+}
+
+.tag-suggestions[hidden] {
+  display: none;
+}
+
+button.tag-suggestion {
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 999px;
+  color: var(--accent, #58a6ff);
+  background: color-mix(in srgb, var(--accent, #58a6ff), transparent 86%);
+  font-size: 12px;
+}
+
 button {
   min-height: 42px;
   border: 0;
@@ -128,11 +177,6 @@ button {
   color: #07120f;
   background: var(--accent, #58a6ff);
   font-weight: 900;
-}
-
-.composer > button {
-  min-width: 88px;
-  align-self: start;
 }
 
 button.secondary,
@@ -259,6 +303,7 @@ button.tag-filter.active {
   font-size: 22px;
   line-height: 1;
   cursor: grab;
+  transform: translateY(1px);
 }
 
 .drag-handle:active {
@@ -287,7 +332,8 @@ button.tag-filter.active {
 .check {
   width: 21px;
   height: 21px;
-  margin: 4px 0 0;
+  min-height: 21px;
+  margin: 2px 0 0;
   padding: 0;
   accent-color: var(--accent, #58a6ff);
   cursor: pointer;
@@ -419,17 +465,38 @@ button.tag-filter.active {
   input,
   textarea {
     border-radius: 7px;
-    padding: 8px 10px;
+    min-height: 38px;
+    padding: 7px 10px;
+  }
+
+  textarea {
+    height: 38px;
+    min-height: 38px;
   }
 
   .composer {
-    grid-template-columns: 1fr;
     padding: 10px;
   }
 
-  .composer > button {
-    width: 100%;
+  .tag-submit-row {
+    grid-template-columns: minmax(0, 3fr) minmax(44px, 1fr);
+    gap: 7px;
+  }
+
+  .add-button {
     min-height: 38px;
+    padding: 0 10px;
+    font-size: 20px;
+  }
+
+  .tag-suggestions {
+    gap: 5px;
+    padding: 7px;
+  }
+
+  button.tag-suggestion {
+    min-height: 27px;
+    padding: 0 8px;
   }
 
   .controls {
@@ -478,6 +545,8 @@ button.tag-filter.active {
   .check {
     width: 19px;
     height: 19px;
+    min-height: 19px;
+    margin-top: 1px;
   }
 
   .title {

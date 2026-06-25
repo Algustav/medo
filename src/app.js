@@ -17,6 +17,8 @@ const tagFilters = document.querySelector("#tagFilters");
 const syncStatus = document.querySelector("#syncStatus");
 const themeSelect = document.querySelector("#themeSelect");
 const syncButton = document.querySelector("#syncButton");
+const submitButton = form.querySelector("button[type='submit']");
+const tagSuggestions = document.querySelector("#tagSuggestions");
 
 const URL_PATTERN = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
 const TRAILING_PUNCTUATION = /[),.;:!?，。；：！？）】》]+$/;
@@ -56,6 +58,45 @@ function visibleTasks() {
     const matchesTag = !tagFilter || task.tags.includes(tagFilter);
     return matchesStatus && matchesTag;
   });
+}
+
+function allTags() {
+  return [...new Set(tasks.flatMap(task => task.tags))]
+    .sort((a, b) => a.localeCompare(b, "zh-CN"));
+}
+
+function currentInputTags() {
+  return new Set(parseTags(tagsInput.value));
+}
+
+function renderTagSuggestions() {
+  const currentTags = currentInputTags();
+  const suggestions = allTags().filter(tag => !currentTags.has(tag)).slice(0, 12);
+  tagSuggestions.replaceChildren();
+
+  if (!suggestions.length) {
+    tagSuggestions.hidden = true;
+    return;
+  }
+
+  suggestions.forEach(tag => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "tag-suggestion";
+    button.textContent = `#${tag}`;
+    button.dataset.tag = tag;
+    tagSuggestions.append(button);
+  });
+
+  tagSuggestions.hidden = false;
+}
+
+function addTagToInput(tag) {
+  const tags = parseTags(tagsInput.value);
+  if (!tags.includes(tag)) tags.push(tag);
+  tagsInput.value = tags.join(", ");
+  tagsInput.focus();
+  renderTagSuggestions();
 }
 
 function appendTextWithLinks(target, text) {
@@ -104,7 +145,7 @@ function setNoteExpanded(note, expanded) {
 
 function setBusy(nextBusy, message = "") {
   busy = nextBusy;
-  form.querySelector("button").disabled = busy;
+  submitButton.disabled = busy;
   clearDoneButton.disabled = busy || !tasks.some(task => task.done);
   syncButton.disabled = busy;
   if (message) syncStatus.textContent = message;
@@ -131,7 +172,7 @@ function showError(error) {
 }
 
 function renderTagFilters() {
-  const tags = [...new Set(tasks.flatMap(task => task.tags))].sort((a, b) => a.localeCompare(b, "zh-CN"));
+  const tags = allTags();
   tagFilters.replaceChildren();
 
   if (tagFilter && !tags.includes(tagFilter)) tagFilter = "";
@@ -199,6 +240,7 @@ function render() {
   emptyState.classList.toggle("show", visible.length === 0);
   clearDoneButton.disabled = busy || !tasks.some(task => task.done);
   renderTagFilters();
+  if (document.activeElement === tagsInput) renderTagSuggestions();
 }
 
 async function mutate(action) {
@@ -233,8 +275,29 @@ form.addEventListener("submit", event => {
     });
     tasks.push(task);
     form.reset();
+    tagSuggestions.hidden = true;
     titleInput.focus();
   });
+});
+
+tagsInput.addEventListener("focus", renderTagSuggestions);
+tagsInput.addEventListener("input", renderTagSuggestions);
+
+tagSuggestions.addEventListener("mousedown", event => {
+  event.preventDefault();
+  event.stopPropagation();
+});
+
+tagSuggestions.addEventListener("click", event => {
+  event.stopPropagation();
+  const button = event.target.closest("[data-tag]");
+  if (!button) return;
+  addTagToInput(button.dataset.tag);
+});
+
+document.addEventListener("click", event => {
+  if (event.target === tagsInput || event.target.closest("#tagSuggestions")) return;
+  tagSuggestions.hidden = true;
 });
 
 list.addEventListener("change", event => {
