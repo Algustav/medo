@@ -3,6 +3,11 @@ import { initThemeSelector } from "./ui/page-theme.js?v=20260625c";
 
 const store = new TaskStore();
 
+const AUTO_SYNC_DEBOUNCE_MS = 2500;
+const AUTO_SYNC_MIN_INTERVAL_MS = 15000;
+const AUTO_SYNC_IDLE_INTERVAL_MS = 120000;
+const AUTO_SYNC_RETRY_AFTER_FAILURE_MS = 60000;
+
 const form = document.querySelector("#todoForm");
 const titleInput = document.querySelector("#todoTitle");
 const noteInput = document.querySelector("#todoNote");
@@ -27,6 +32,10 @@ let tasks = [];
 let statusFilter = "active";
 let tagFilter = "";
 let busy = false;
+let autoSyncTimer = null;
+let autoSyncInFlight = false;
+let lastAutoSyncAt = 0;
+let lastAutoSyncFailedAt = 0;
 
 initThemeSelector(themeSelect);
 
@@ -154,10 +163,10 @@ function setBusy(nextBusy, message = "") {
 function statusText(detail = {}) {
   const pending = detail.pending ?? store.pendingOps?.length ?? 0;
 
-  if (detail.status === "synced") return "已同步到 D1";
-  if (detail.status === "syncing") return `正在同步 ${pending} 个离线改动…`;
-  if (detail.status === "offline-pending") return `离线可用，待同步 ${pending} 个改动`;
-  return "本地离线模式";
+  if (detail.status === "synced") return "已同步";
+  if (detail.status === "syncing") return pending ? `同步中 ${pending}` : "同步中";
+  if (detail.status === "offline-pending") return `待同步 ${pending}`;
+  return "离线";
 }
 
 function setStatus(detail) {
@@ -167,8 +176,54 @@ function setStatus(detail) {
 
 function showError(error) {
   console.error(error);
-  syncStatus.textContent = "保存失败，已先保存在本地";
+  syncStatus.textContent = "本地已存";
   syncStatus.classList.add("error");
+}
+
+function canAutoSync() {
+  return navigator.onLine && document.visibilityState !== "hidden";
+}
+
+function scheduleAutoSync(reason = "change", delay = AUTO_SYNC_DEBOUNCE_MS) {
+  window.clearTimeout(autoSyncTimer);
+  autoSyncTimer = window.setTimeout(() => {
+    runAutoSync(reason);
+  }, delay);
+}
+
+async function runAutoSync(reason = "auto", { force = false } = {}) {
+  if (busy || autoSyncInFlight || !canAutoSync()) return;
+
+  const now = Date.now();
+  const hasPending = store.pendingOps.length > 0;
+  const shouldPull =
+    force ||
+    hasPending ||
+    now - lastAutoSyncAt > AUTO_SYNC_IDLE_INTERVAL_MS ||
+    reason === "online" ||
+    reason === "visible" ||
+    reason === "focus";
+
+  if (!shouldPull) return;
+  if (!force && now - lastAutoSyncAt < AUTO_SYNC_MIN_INTERVAL_MS && !hasPending) return;
+  if (!force && lastAutoSyncFailedAt && now - lastAutoSyncFailedAt < AUTO_SYNC_RETRY_AFTER_FAILURE_MS) return;
+
+  autoSyncInFlight = true;
+  syncButton.disabled = true;
+
+  try {
+    tasks = await store.sync();
+    lastAutoSyncAt = Date.now();
+    lastAutoSyncFailedAt = 0;
+    render();
+    setStatus({ status: store.status, pending: store.pendingOps.length });
+  } catch (error) {
+    lastAutoSyncFailedAt = Date.now();
+    setStatus({ status: store.status, pending: store.pendingOps.length });
+  } finally {
+    autoSyncInFlight = false;
+    syncButton.disabled = busy;
+  }
 }
 
 function renderTagFilters() {
@@ -251,9 +306,11 @@ async function mutate(action) {
     await action();
     render();
     setStatus({ status: store.status, pending: store.pendingOps.length });
+    scheduleAutoSync("mutation");
   } catch (error) {
     render();
     showError(error);
+    scheduleAutoSync("mutation-failed", AUTO_SYNC_RETRY_AFTER_FAILURE_MS);
   } finally {
     setBusy(false);
   }
@@ -463,14 +520,22 @@ store.addEventListener("statuschange", event => {
 });
 
 window.addEventListener("online", async () => {
-  try {
-    tasks = await store.sync();
-    render();
-    setStatus({ status: store.status, pending: store.pendingOps.length });
-  } catch {
-    setStatus({ status: store.status, pending: store.pendingOps.length });
+  scheduleAutoSync("online", 300);
+});
+
+window.addEventListener("focus", () => {
+  scheduleAutoSync("focus", 600);
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    scheduleAutoSync("visible", 600);
   }
 });
+
+window.setInterval(() => {
+  scheduleAutoSync("interval", 0);
+}, AUTO_SYNC_IDLE_INTERVAL_MS);
 
 installDragSorting();
 
@@ -480,6 +545,7 @@ async function start() {
     tasks = await store.load();
     render();
     setStatus({ status: store.status, pending: store.pendingOps.length });
+    scheduleAutoSync("startup", 1200);
   } finally {
     setBusy(false);
   }

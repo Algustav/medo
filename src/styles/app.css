@@ -4,6 +4,7 @@
 
 :root {
   color-scheme: dark;
+  --tag-accent: #bc8cff;
 }
 
 :root[data-tone="light"] {
@@ -186,6 +187,12 @@ button.tag-filter {
   background: var(--touch-bg, #21262d);
 }
 
+button.tag-filter {
+  border: 1px solid color-mix(in srgb, var(--tag-accent), transparent 70%);
+  color: var(--tag-accent);
+  background: color-mix(in srgb, var(--tag-accent), transparent 90%);
+}
+
 button.compact,
 button.filter,
 button.tag-filter,
@@ -213,10 +220,13 @@ button.sync-button:hover {
   gap: 12px;
 }
 
-.sync-bar {
+.sync-cluster {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-left: auto;
+  min-width: fit-content;
 }
 
 .filter-tabs,
@@ -227,9 +237,15 @@ button.sync-button:hover {
 }
 
 button.filter.active,
-button.tag-filter.active {
+button.filter.active {
   color: #07120f;
   background: var(--accent, #58a6ff);
+}
+
+button.tag-filter.active {
+  color: #12071f;
+  background: var(--tag-accent);
+  border-color: var(--tag-accent);
 }
 
 .tag-filters:empty {
@@ -240,6 +256,16 @@ button.tag-filter.active {
 .toolbar {
   color: var(--muted, #8b949e);
   font-size: 13px;
+}
+
+.sync-status {
+  max-width: 120px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1;
 }
 
 .sync-status.error {
@@ -414,8 +440,8 @@ button.tag-filter.active {
 .tag {
   padding: 3px 8px;
   border-radius: 999px;
-  color: var(--accent, #58a6ff);
-  background: color-mix(in srgb, var(--accent, #58a6ff), transparent 86%);
+  color: var(--tag-accent);
+  background: color-mix(in srgb, var(--tag-accent), transparent 88%);
   font-size: 12px;
   font-weight: 800;
 }
@@ -500,8 +526,8 @@ button.tag-filter.active {
   }
 
   .controls {
-    align-items: start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
     gap: 8px;
   }
 
@@ -510,8 +536,14 @@ button.tag-filter.active {
     justify-content: space-between;
   }
 
+  .sync-cluster {
+    gap: 6px;
+    margin-left: auto;
+  }
+
   .sync-status {
-    order: 2;
+    max-width: 76px;
+    font-size: 10px;
   }
 
   .filter-tabs,

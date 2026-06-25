@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="./public/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="./public/favicon-16.png">
   <link rel="apple-touch-icon" href="./public/apple-touch-icon.png">
-  <link rel="stylesheet" href="./src/styles/app.css?v=20260625j">
+  <link rel="stylesheet" href="./src/styles/app.css?v=20260625m">
 </head>
 <body>
   <main class="app-shell">
@@ -45,9 +45,11 @@
         <button class="filter active" type="button" data-status="active">待办</button>
         <button class="filter" type="button" data-status="all">全部</button>
         <button class="filter" type="button" data-status="done">已完成</button>
+      </div>
+      <div class="sync-cluster">
+        <span class="sync-status" id="syncStatus" role="status">连接中</span>
         <button class="sync-button compact" id="syncButton" type="button" title="同步到云端">↻ 同步</button>
       </div>
-      <span class="sync-status" id="syncStatus" role="status">正在连接…</span>
     </section>
 
     <nav class="tag-filters" id="tagFilters" aria-label="按标签筛选"></nav>
@@ -80,6 +82,6 @@
     </li>
   </template>
 
-  <script type="module" src="./src/app.js?v=20260625j"></script>
+  <script type="module" src="./src/app.js?v=20260625m"></script>
 </body>
 </html>
