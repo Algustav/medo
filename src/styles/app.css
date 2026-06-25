@@ -4,7 +4,6 @@
 
 :root {
   color-scheme: dark;
-  --tag-accent: #bc8cff;
 }
 
 :root[data-tone="light"] {
@@ -236,7 +235,6 @@ button.sync-button:hover {
   gap: 8px;
 }
 
-button.filter.active,
 button.filter.active {
   color: #07120f;
   background: var(--accent, #58a6ff);

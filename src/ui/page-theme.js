@@ -1,4 +1,4 @@
-import { applyCssTheme, defaultTheme, getTheme, listThemes } from "./theme.js";
+import { applyCssTheme, defaultTheme, getTheme, listThemes } from "./theme.js?v=20260625o";
 
 const THEME_STORAGE_KEY = "medo-theme";
 const OLD_THEME_STORAGE_KEY = "todo-theme";

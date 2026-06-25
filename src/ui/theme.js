@@ -470,10 +470,45 @@ Object.values(themes).forEach(theme => {
 
 export const defaultTheme = themes.githubDark;
 
+function parseHexColor(value) {
+  const hex = String(value || "").trim().replace(/^#/, "");
+  if (!/^[\da-f]{6}$/i.test(hex)) return null;
+  return [0, 2, 4].map(index => Number.parseInt(hex.slice(index, index + 2), 16));
+}
+
+function colorDistance(a, b) {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+function pickTagAccent(theme) {
+  const accent = parseHexColor(theme.css["--accent"]);
+  const colors = Object.values(theme.colors || {});
+
+  if (!accent || !colors.length) {
+    return theme.css["--muted"] || theme.css["--accent"];
+  }
+
+  const candidates = colors
+    .map(value => ({ value, rgb: parseHexColor(value) }))
+    .filter(candidate => (
+      candidate.rgb &&
+      candidate.value.toLowerCase() !== theme.css["--accent"].toLowerCase()
+    ))
+    .map(candidate => ({
+      ...candidate,
+      distance: colorDistance(accent, candidate.rgb)
+    }))
+    .sort((a, b) => a.distance - b.distance);
+
+  return candidates[0]?.value || theme.css["--muted"] || theme.css["--accent"];
+}
+
 export function applyCssTheme(theme) {
   Object.entries(theme.css).forEach(([name, value]) => {
     document.documentElement.style.setProperty(name, value);
   });
+
+  document.documentElement.style.setProperty("--tag-accent", pickTagAccent(theme));
 }
 
 export function getTheme(id) {

@@ -1,5 +1,5 @@
 import { TaskStore } from "./store.js?v=20260625c";
-import { initThemeSelector } from "./ui/page-theme.js?v=20260625c";
+import { initThemeSelector } from "./ui/page-theme.js?v=20260625o";
 
 const store = new TaskStore();
 
