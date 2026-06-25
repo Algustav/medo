@@ -251,23 +251,15 @@ export class TaskStore extends EventTarget {
     }
   }
 
-  async applyCloudOperation(op) {
-    try {
-      await sendOperation(op);
-      this.mode = "cloud";
-    } catch {
-      this.mode = "local";
-      this.queue(op);
-    } finally {
-      this.emitStatus();
-    }
+  applyCloudOperation(op) {
+    this.queue(op);
   }
 
   async create(task) {
     const normalized = normalizeTask(task, this.localTasks.length);
     this.localTasks.push(normalized);
     this.saveLocal();
-    await this.applyCloudOperation({ type: "create", task: normalized });
+    this.applyCloudOperation({ type: "create", task: normalized });
     return cloneTask(normalized);
   }
 
@@ -279,14 +271,14 @@ export class TaskStore extends EventTarget {
       return updated;
     });
     this.saveLocal();
-    await this.applyCloudOperation({ type: "update", id, patch });
+    this.applyCloudOperation({ type: "update", id, patch });
     return updated ? cloneTask(updated) : null;
   }
 
   async remove(id) {
     this.localTasks = this.localTasks.filter(task => task.id !== id);
     this.saveLocal();
-    await this.applyCloudOperation({ type: "delete", id });
+    this.applyCloudOperation({ type: "delete", id });
   }
 
   async reorder(ids) {
@@ -296,12 +288,12 @@ export class TaskStore extends EventTarget {
       position: positions.has(task.id) ? positions.get(task.id) : task.position
     }));
     this.saveLocal();
-    await this.applyCloudOperation({ type: "reorder", ids });
+    this.applyCloudOperation({ type: "reorder", ids });
   }
 
   async clearDone() {
     this.localTasks = this.localTasks.filter(task => !task.done);
     this.saveLocal();
-    await this.applyCloudOperation({ type: "clearDone" });
+    this.applyCloudOperation({ type: "clearDone" });
   }
 }
