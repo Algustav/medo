@@ -115,16 +115,32 @@ textarea {
   box-shadow: 0 16px 36px var(--shadow, rgba(1, 4, 9, .22));
 }
 
+.composer.is-editing {
+  border-color: color-mix(in srgb, var(--accent, #58a6ff), transparent 38%);
+}
+
 .fields {
   display: grid;
   gap: 7px;
 }
 
-.tag-submit-row {
+.composer-detail-row {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(42px, 1fr);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 8px;
-  align-items: start;
+  align-items: stretch;
+}
+
+.composer-detail-row textarea {
+  height: 91px;
+  min-height: 91px;
+}
+
+.composer-side {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
+  min-width: 0;
 }
 
 .tag-input-wrap {
@@ -134,8 +150,30 @@ textarea {
 
 .add-button {
   min-width: 0;
-  min-height: 42px;
+  width: 100%;
+  min-height: 100%;
   padding: 0 12px;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.form-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.form-actions.is-editing {
+  grid-template-columns: 1fr 1fr;
+}
+
+.cancel-edit-button {
+  min-width: 0;
+  width: 100%;
+  min-height: 100%;
+  border: 1px solid color-mix(in srgb, var(--accent, #58a6ff), transparent 45%);
+  color: var(--accent, #58a6ff);
+  background: color-mix(in srgb, var(--accent, #58a6ff), transparent 86%);
   font-size: 22px;
   line-height: 1;
 }
@@ -195,19 +233,23 @@ button.tag-filter {
 button.compact,
 button.filter,
 button.tag-filter,
-button.sync-button {
+button.sync-button,
+button.sort-button {
   min-height: 34px;
   padding: 0 11px;
   font-size: 13px;
 }
 
-button.sync-button {
+button.sync-button,
+button.sort-button {
   border: 1px solid color-mix(in srgb, var(--accent, #58a6ff), transparent 45%);
   color: var(--accent, #58a6ff);
   background: color-mix(in srgb, var(--accent, #58a6ff), transparent 86%);
 }
 
-button.sync-button:hover {
+button.sync-button:hover,
+button.sort-button:hover,
+.cancel-edit-button:hover {
   background: color-mix(in srgb, var(--accent, #58a6ff), transparent 78%);
 }
 
@@ -376,6 +418,7 @@ button.tag-filter.active {
   color: var(--text, #e6edf3);
   font-size: 17px;
   line-height: 1.35;
+  cursor: pointer;
   overflow-wrap: anywhere;
 }
 
@@ -506,13 +549,22 @@ button.tag-filter.active {
     padding: 10px;
   }
 
-  .tag-submit-row {
-    grid-template-columns: minmax(0, 3fr) minmax(44px, 1fr);
+  .composer-detail-row {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .composer-detail-row textarea {
+    height: 83px;
+    min-height: 83px;
+  }
+
+  .composer-side,
+  .form-actions {
     gap: 7px;
   }
 
   .add-button {
-    min-height: 38px;
     padding: 0 10px;
     font-size: 20px;
   }
@@ -556,7 +608,8 @@ button.tag-filter.active {
   button.compact,
   button.filter,
   button.tag-filter,
-  button.sync-button {
+  button.sync-button,
+  button.sort-button {
     min-height: 31px;
     padding: 0 9px;
     font-size: 12px;

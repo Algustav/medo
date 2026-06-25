@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="./public/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="./public/favicon-16.png">
   <link rel="apple-touch-icon" href="./public/apple-touch-icon.png">
-  <link rel="stylesheet" href="./src/styles/app.css?v=20260625p">
+  <link rel="stylesheet" href="./src/styles/app.css?v=20260625q">
 </head>
 <body>
   <main class="app-shell">
@@ -29,13 +29,18 @@
     <form class="composer" id="todoForm">
       <div class="fields">
         <input id="todoTitle" name="title" autocomplete="off" maxlength="200" placeholder="新增任务" required>
-        <textarea id="todoNote" name="note" maxlength="2000" placeholder="备注，可选"></textarea>
-        <div class="tag-submit-row">
-          <div class="tag-input-wrap">
-            <input id="todoTags" name="tags" autocomplete="off" maxlength="200" placeholder="标签，用逗号分隔，例如：网站, 紧急">
-            <div class="tag-suggestions" id="tagSuggestions" hidden></div>
+        <div class="composer-detail-row">
+          <textarea id="todoNote" name="note" maxlength="2000" placeholder="备注，可选"></textarea>
+          <div class="composer-side">
+            <div class="tag-input-wrap">
+              <input id="todoTags" name="tags" autocomplete="off" maxlength="200" placeholder="标签，用逗号分隔">
+              <div class="tag-suggestions" id="tagSuggestions" hidden></div>
+            </div>
+            <div class="form-actions">
+              <button class="cancel-edit-button" id="cancelEditButton" type="button" aria-label="取消编辑" title="取消编辑" hidden>×</button>
+              <button class="add-button" type="submit" aria-label="添加" title="添加">+</button>
+            </div>
           </div>
-          <button class="add-button" type="submit" aria-label="添加" title="添加">✓</button>
         </div>
       </div>
     </form>
@@ -45,6 +50,7 @@
         <button class="filter active" type="button" data-status="active">待办</button>
         <button class="filter" type="button" data-status="all">全部</button>
         <button class="filter" type="button" data-status="done">已完成</button>
+        <button class="sort-button compact" id="sortButton" type="button" aria-label="排序：新任务在前" title="排序：新任务在前">∨</button>
       </div>
       <div class="sync-cluster">
         <span class="sync-status" id="syncStatus" role="status">连接中</span>
@@ -82,6 +88,6 @@
     </li>
   </template>
 
-  <script type="module" src="./src/app.js?v=20260625p"></script>
+  <script type="module" src="./src/app.js?v=20260625q"></script>
 </body>
 </html>

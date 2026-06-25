@@ -1,4 +1,4 @@
-import { TaskStore } from "./store.js?v=20260625p";
+import { TaskStore } from "./store.js?v=20260625q";
 import { initThemeSelector } from "./ui/page-theme.js?v=20260625o";
 
 const store = new TaskStore();
@@ -22,11 +22,21 @@ const tagFilters = document.querySelector("#tagFilters");
 const syncStatus = document.querySelector("#syncStatus");
 const themeSelect = document.querySelector("#themeSelect");
 const syncButton = document.querySelector("#syncButton");
+const sortButton = document.querySelector("#sortButton");
 const submitButton = form.querySelector("button[type='submit']");
+const cancelEditButton = document.querySelector("#cancelEditButton");
+const formActions = document.querySelector(".form-actions");
 const tagSuggestions = document.querySelector("#tagSuggestions");
 
 const URL_PATTERN = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
 const TRAILING_PUNCTUATION = /[),.;:!?，。；：！？）】》]+$/;
+const SORT_STORAGE_KEY = "medo-sort-mode-v1";
+const SORT_MODES = ["newest", "oldest", "manual"];
+const SORT_META = {
+  newest: { label: "排序：新任务在前", symbol: "∨" },
+  oldest: { label: "排序：旧任务在前", symbol: "∧" },
+  manual: { label: "排序：手动排序", symbol: "⋮⋮" }
+};
 
 let tasks = [];
 let statusFilter = "active";
@@ -36,6 +46,10 @@ let autoSyncTimer = null;
 let autoSyncInFlight = false;
 let lastAutoSyncAt = 0;
 let lastAutoSyncFailedAt = 0;
+let editingId = "";
+let sortMode = SORT_MODES.includes(localStorage.getItem(SORT_STORAGE_KEY))
+  ? localStorage.getItem(SORT_STORAGE_KEY)
+  : "newest";
 
 initThemeSelector(themeSelect);
 
@@ -55,7 +69,17 @@ function parseTags(value) {
 }
 
 function sortedTasks(source = tasks) {
-  return [...source].sort((a, b) => a.position - b.position);
+  return [...source].sort((a, b) => {
+    if (sortMode === "newest") {
+      return b.createdAt - a.createdAt || b.position - a.position;
+    }
+
+    if (sortMode === "oldest") {
+      return a.createdAt - b.createdAt || a.position - b.position;
+    }
+
+    return a.position - b.position;
+  });
 }
 
 function visibleTasks() {
@@ -92,7 +116,7 @@ function renderTagSuggestions() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "tag-suggestion";
-    button.textContent = `#${tag}`;
+    button.textContent = tag;
     button.dataset.tag = tag;
     tagSuggestions.append(button);
   });
@@ -155,8 +179,10 @@ function setNoteExpanded(note, expanded) {
 function setBusy(nextBusy, message = "") {
   busy = nextBusy;
   submitButton.disabled = busy;
+  cancelEditButton.disabled = busy;
   clearDoneButton.disabled = busy || !tasks.some(task => task.done);
   syncButton.disabled = busy;
+  sortButton.disabled = busy;
   if (message) syncStatus.textContent = message;
 }
 
@@ -244,10 +270,51 @@ function renderTagFilters() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `tag-filter${tagFilter === tag ? " active" : ""}`;
-    button.textContent = `#${tag}`;
+    button.textContent = tag;
     button.dataset.tag = tag;
     tagFilters.append(button);
   });
+}
+
+function renderSortButton() {
+  const meta = SORT_META[sortMode];
+  sortButton.textContent = meta.symbol;
+  sortButton.setAttribute("aria-label", meta.label);
+  sortButton.title = meta.label;
+}
+
+function setSortMode(nextMode) {
+  sortMode = nextMode;
+  localStorage.setItem(SORT_STORAGE_KEY, sortMode);
+  renderSortButton();
+}
+
+function renderComposerMode() {
+  const isEditing = Boolean(editingId);
+  form.classList.toggle("is-editing", isEditing);
+  formActions.classList.toggle("is-editing", isEditing);
+  cancelEditButton.hidden = !isEditing;
+  submitButton.textContent = isEditing ? "✓" : "+";
+  submitButton.setAttribute("aria-label", isEditing ? "保存修改" : "添加");
+  submitButton.title = isEditing ? "保存修改" : "添加";
+  titleInput.placeholder = isEditing ? "编辑任务" : "新增任务";
+}
+
+function exitEditMode({ clearForm = true } = {}) {
+  editingId = "";
+  if (clearForm) form.reset();
+  tagSuggestions.hidden = true;
+  renderComposerMode();
+}
+
+function startEdit(task) {
+  editingId = task.id;
+  titleInput.value = task.title;
+  noteInput.value = task.note;
+  tagsInput.value = task.tags.join(", ");
+  tagSuggestions.hidden = true;
+  renderComposerMode();
+  titleInput.focus();
 }
 
 function render() {
@@ -263,7 +330,9 @@ function render() {
     check.checked = task.done;
     check.setAttribute("aria-label", `${task.done ? "恢复" : "完成"}：${task.title}`);
 
-    appendTextWithLinks(item.querySelector(".title"), task.title);
+    const title = item.querySelector(".title");
+    title.title = "点击编辑任务";
+    appendTextWithLinks(title, task.title);
 
     const note = item.querySelector(".note");
     note.hidden = !task.note;
@@ -282,7 +351,7 @@ function render() {
     task.tags.forEach(tag => {
       const label = document.createElement("span");
       label.className = "tag";
-      label.textContent = `#${tag}`;
+      label.textContent = tag;
       tags.append(label);
     });
 
@@ -295,6 +364,8 @@ function render() {
   emptyState.classList.toggle("show", visible.length === 0);
   clearDoneButton.disabled = busy || !tasks.some(task => task.done);
   renderTagFilters();
+  renderSortButton();
+  renderComposerMode();
   if (document.activeElement === tagsInput) renderTagSuggestions();
 }
 
@@ -322,13 +393,25 @@ form.addEventListener("submit", event => {
   if (!title) return;
 
   mutate(async () => {
+    if (editingId) {
+      const updated = await store.update(editingId, {
+        title,
+        note: noteInput.value.trim(),
+        tags: parseTags(tagsInput.value)
+      });
+      tasks = tasks.map(task => task.id === editingId ? updated : task);
+      exitEditMode();
+      return;
+    }
+
     const task = await store.create({
       id: crypto.randomUUID(),
       title,
       note: noteInput.value.trim(),
       tags: parseTags(tagsInput.value),
       done: false,
-      position: tasks.length
+      position: tasks.length,
+      createdAt: Date.now()
     });
     tasks.push(task);
     form.reset();
@@ -372,6 +455,14 @@ list.addEventListener("change", event => {
 list.addEventListener("click", event => {
   if (event.target.closest("a")) return;
 
+  const title = event.target.closest(".title");
+  if (title) {
+    const id = title.closest(".item").dataset.id;
+    const task = tasks.find(candidate => candidate.id === id);
+    if (task) startEdit(task);
+    return;
+  }
+
   const note = event.target.closest(".note.is-collapsible");
   if (note) {
     setNoteExpanded(note, !note.classList.contains("expanded"));
@@ -405,6 +496,7 @@ list.addEventListener("click", event => {
   mutate(async () => {
     await store.remove(id);
     tasks = tasks.filter(task => task.id !== id);
+    if (editingId === id) exitEditMode();
   });
 });
 
@@ -440,6 +532,12 @@ statusFilters.addEventListener("click", event => {
   render();
 });
 
+sortButton.addEventListener("click", () => {
+  const currentIndex = SORT_MODES.indexOf(sortMode);
+  setSortMode(SORT_MODES[(currentIndex + 1) % SORT_MODES.length]);
+  render();
+});
+
 tagFilters.addEventListener("click", event => {
   const button = event.target.closest("[data-tag]");
   if (!button) return;
@@ -451,7 +549,13 @@ clearDoneButton.addEventListener("click", () => {
   mutate(async () => {
     await store.clearDone();
     tasks = tasks.filter(task => !task.done);
+    if (editingId && !tasks.some(task => task.id === editingId)) exitEditMode();
   });
+});
+
+cancelEditButton.addEventListener("click", () => {
+  exitEditMode();
+  titleInput.focus();
 });
 
 syncButton.addEventListener("click", async () => {
@@ -498,7 +602,9 @@ function installDragSorting() {
     const visibleIds = [...list.querySelectorAll(".item")].map(item => item.dataset.id);
     const visibleSet = new Set(visibleIds);
     let visibleIndex = 0;
-    const orderedIds = sortedTasks().map(task => (
+    const displayedOrder = sortedTasks();
+    setSortMode("manual");
+    const orderedIds = displayedOrder.map(task => (
       visibleSet.has(task.id) ? visibleIds[visibleIndex++] : task.id
     ));
 
@@ -538,6 +644,8 @@ window.setInterval(() => {
 }, AUTO_SYNC_IDLE_INTERVAL_MS);
 
 installDragSorting();
+renderSortButton();
+renderComposerMode();
 
 async function start() {
   try {

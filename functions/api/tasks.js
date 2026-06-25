@@ -24,7 +24,8 @@ function mapTask(row) {
     note: row.note || "",
     tags: Array.isArray(tags) ? tags : [],
     done: Boolean(row.done),
-    position: Number(row.position)
+    position: Number(row.position),
+    createdAt: Number.isFinite(Number(row.created_at)) ? Number(row.created_at) : Number(row.position)
   };
 }
 
@@ -41,15 +42,37 @@ function cleanTags(tags) {
   return [...new Set(tags.map(tag => String(tag).trim()).filter(Boolean))].slice(0, 8);
 }
 
+async function ensureSchema(env) {
+  try {
+    await env.TODO_DB
+      .prepare("ALTER TABLE tasks ADD COLUMN created_at REAL NOT NULL DEFAULT 0")
+      .run();
+  } catch {
+    // 已存在该列时忽略；用于让旧 D1 数据库自动补齐排序字段。
+  }
+
+  try {
+    await env.TODO_DB
+      .prepare("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at)")
+      .run();
+  } catch {
+    // 索引创建失败不影响核心读写。
+  }
+}
+
 export async function onRequestGet({ env }) {
+  await ensureSchema(env);
+
   const result = await env.TODO_DB
-    .prepare("SELECT id, title, note, tags, done, position FROM tasks ORDER BY position ASC")
+    .prepare("SELECT id, title, note, tags, done, position, created_at FROM tasks ORDER BY position ASC")
     .all();
 
   return json({ tasks: result.results.map(mapTask) });
 }
 
 export async function onRequestPost({ request, env }) {
+  await ensureSchema(env);
+
   const body = await requestBody(request);
   const title = String(body?.title || "").trim();
 
@@ -63,19 +86,21 @@ export async function onRequestPost({ request, env }) {
     note: String(body.note || "").trim().slice(0, 2000),
     tags: cleanTags(body.tags),
     done: Boolean(body.done),
-    position: Number.isFinite(Number(body.position)) ? Number(body.position) : 0
+    position: Number.isFinite(Number(body.position)) ? Number(body.position) : 0,
+    createdAt: Number.isFinite(Number(body.createdAt)) ? Number(body.createdAt) : Date.now()
   };
 
   await env.TODO_DB
     .prepare(
-      `INSERT INTO tasks (id, title, note, tags, done, position)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
+      `INSERT INTO tasks (id, title, note, tags, done, position, created_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
       + ` ON CONFLICT(id) DO UPDATE SET
           title = excluded.title,
           note = excluded.note,
           tags = excluded.tags,
           done = excluded.done,
-          position = excluded.position`
+          position = excluded.position,
+          created_at = excluded.created_at`
     )
     .bind(
       task.id,
@@ -83,7 +108,8 @@ export async function onRequestPost({ request, env }) {
       task.note,
       JSON.stringify(task.tags),
       Number(task.done),
-      task.position
+      task.position,
+      task.createdAt
     )
     .run();
 
@@ -91,13 +117,15 @@ export async function onRequestPost({ request, env }) {
 }
 
 export async function onRequestPatch({ request, env }) {
+  await ensureSchema(env);
+
   const body = await requestBody(request);
   const id = String(body?.id || "");
 
   if (!id) return json({ error: "id is required" }, 400);
 
   const current = await env.TODO_DB
-    .prepare("SELECT id, title, note, tags, done, position FROM tasks WHERE id = ?1")
+    .prepare("SELECT id, title, note, tags, done, position, created_at FROM tasks WHERE id = ?1")
     .bind(id)
     .first();
 
@@ -110,17 +138,18 @@ export async function onRequestPatch({ request, env }) {
     note: body.note === undefined ? previous.note : String(body.note).trim().slice(0, 2000),
     tags: body.tags === undefined ? previous.tags : cleanTags(body.tags),
     done: body.done === undefined ? previous.done : Boolean(body.done),
-    position: body.position === undefined ? previous.position : Number(body.position)
+    position: body.position === undefined ? previous.position : Number(body.position),
+    createdAt: body.createdAt === undefined ? previous.createdAt : Number(body.createdAt)
   };
 
-  if (!task.title || !Number.isFinite(task.position)) {
+  if (!task.title || !Number.isFinite(task.position) || !Number.isFinite(task.createdAt)) {
     return json({ error: "invalid task" }, 400);
   }
 
   await env.TODO_DB
     .prepare(
       `UPDATE tasks
-       SET title = ?2, note = ?3, tags = ?4, done = ?5, position = ?6
+       SET title = ?2, note = ?3, tags = ?4, done = ?5, position = ?6, created_at = ?7
        WHERE id = ?1`
     )
     .bind(
@@ -129,7 +158,8 @@ export async function onRequestPatch({ request, env }) {
       task.note,
       JSON.stringify(task.tags),
       Number(task.done),
-      task.position
+      task.position,
+      task.createdAt
     )
     .run();
 
