@@ -1,0 +1,8 @@
+name = "medo"
+compatibility_date = "2026-06-25"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "TODO_DB"
+database_name = "medo"
+database_id = "在这里填写你的 D1 Database ID"
