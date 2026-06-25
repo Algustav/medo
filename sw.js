@@ -1,4 +1,4 @@
-const CACHE_NAME = "medo-v8";
+const CACHE_NAME = "medo-v9";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,7 +6,16 @@ const APP_SHELL = [
   "./src/store.js",
   "./src/ui/theme.js",
   "./src/ui/page-theme.js",
-  "./src/styles/app.css?v=20260625j"
+  "./src/styles/app.css?v=20260625j",
+  "./public/favicon.ico",
+  "./public/favicon-16.png",
+  "./public/favicon-32.png",
+  "./public/favicon-48.png",
+  "./public/favicon-64.png",
+  "./public/favicon-256.png",
+  "./public/apple-touch-icon.png",
+  "./public/icon-192.png",
+  "./public/icon-512.png"
 ];
 
 self.addEventListener("install", event => {
