@@ -355,7 +355,7 @@ button.tag-filter.active {
 
 .drag-handle,
 .tag-button,
-.delete-button {
+.archive-button {
   display: grid;
   place-items: center;
   width: 30px;
@@ -380,7 +380,7 @@ button.tag-filter.active {
   cursor: grabbing;
 }
 
-.delete-button {
+.archive-button {
   font-size: 22px;
 }
 
@@ -394,9 +394,9 @@ button.tag-filter.active {
   background: color-mix(in srgb, var(--accent, #58a6ff), transparent 88%);
 }
 
-.delete-button:hover {
-  color: var(--danger, #f85149);
-  background: color-mix(in srgb, var(--danger, #f85149), transparent 88%);
+.archive-button:hover {
+  color: var(--accent, #58a6ff);
+  background: color-mix(in srgb, var(--accent, #58a6ff), transparent 88%);
 }
 
 .check {
@@ -624,7 +624,7 @@ button.tag-filter.active {
 
   .drag-handle,
   .tag-button,
-  .delete-button {
+  .archive-button {
     width: 26px;
     min-height: 26px;
   }

@@ -11,16 +11,21 @@ function cloneTask(task) {
   };
 }
 
+function normalizeTag(tag) {
+  return String(tag).trim().replace(/^#/, "").toLowerCase();
+}
+
 function normalizeTask(task, index = 0) {
   const fallbackCreatedAt = Number.isFinite(Number(task.position)) ? Number(task.position) : index;
   return {
     id: String(task.id),
     title: String(task.title || "").trim(),
     note: String(task.note || "").trim(),
-    tags: Array.isArray(task.tags) ? task.tags.map(String).map(tag => tag.trim()).filter(Boolean) : [],
+    tags: Array.isArray(task.tags) ? [...new Set(task.tags.map(normalizeTag).filter(Boolean))] : [],
     done: Boolean(task.done),
     position: Number.isFinite(Number(task.position)) ? Number(task.position) : index,
-    createdAt: Number.isFinite(Number(task.createdAt)) ? Number(task.createdAt) : fallbackCreatedAt
+    createdAt: Number.isFinite(Number(task.createdAt)) ? Number(task.createdAt) : fallbackCreatedAt,
+    archived: Boolean(task.archived)
   };
 }
 

@@ -1,4 +1,4 @@
-import { TaskStore } from "./store.js?v=20260625q";
+import { TaskStore } from "./store.js?v=20260627b";
 import { initThemeSelector } from "./ui/page-theme.js?v=20260625o";
 
 const store = new TaskStore();
@@ -63,7 +63,7 @@ function parseTags(value) {
   return [...new Set(
     value
       .split(/[,，、\s]+/)
-      .map(tag => tag.trim().replace(/^#/, ""))
+      .map(tag => tag.trim().replace(/^#/, "").toLowerCase())
       .filter(Boolean)
   )].slice(0, 8);
 }
@@ -85,16 +85,21 @@ function sortedTasks(source = tasks) {
 function visibleTasks() {
   return sortedTasks().filter(task => {
     const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "active" && !task.done) ||
-      (statusFilter === "done" && task.done);
-    const matchesTag = !tagFilter || task.tags.includes(tagFilter);
+      (statusFilter === "all" && !task.archived) ||
+      (statusFilter === "active" && !task.done && !task.archived) ||
+      (statusFilter === "done" && task.done && !task.archived) ||
+      (statusFilter === "archived" && task.archived);
+    const matchesTag = !tagFilter || task.tags.some(tag => tag.toLowerCase() === tagFilter);
     return matchesStatus && matchesTag;
   });
 }
 
-function allTags() {
-  return [...new Set(tasks.flatMap(task => task.tags))]
+function activeTags() {
+  return [...new Set(
+    tasks
+      .filter(task => !task.done && !task.archived)
+      .flatMap(task => task.tags.map(tag => tag.toLowerCase()))
+  )]
     .sort((a, b) => a.localeCompare(b, "zh-CN"));
 }
 
@@ -104,7 +109,7 @@ function currentInputTags() {
 
 function renderTagSuggestions() {
   const currentTags = currentInputTags();
-  const suggestions = allTags().filter(tag => !currentTags.has(tag)).slice(0, 12);
+  const suggestions = activeTags().filter(tag => !currentTags.has(tag)).slice(0, 12);
   tagSuggestions.replaceChildren();
 
   if (!suggestions.length) {
@@ -253,7 +258,7 @@ async function runAutoSync(reason = "auto", { force = false } = {}) {
 }
 
 function renderTagFilters() {
-  const tags = allTags();
+  const tags = activeTags();
   tagFilters.replaceChildren();
 
   if (tagFilter && !tags.includes(tagFilter)) tagFilter = "";
@@ -325,10 +330,16 @@ function render() {
     const item = template.content.firstElementChild.cloneNode(true);
     item.dataset.id = task.id;
     item.classList.toggle("done", task.done);
+    item.classList.toggle("archived", task.archived);
 
     const check = item.querySelector(".check");
     check.checked = task.done;
     check.setAttribute("aria-label", `${task.done ? "恢复" : "完成"}：${task.title}`);
+
+    const archiveButton = item.querySelector(".archive-button");
+    archiveButton.textContent = task.archived ? "⇱" : "⇲";
+    archiveButton.setAttribute("aria-label", task.archived ? "恢复归档" : "归档任务");
+    archiveButton.title = task.archived ? "恢复归档" : "归档任务";
 
     const title = item.querySelector(".title");
     title.title = "点击编辑任务";
@@ -358,8 +369,12 @@ function render() {
     list.append(item);
   });
 
-  const activeCount = tasks.filter(task => !task.done).length;
-  count.textContent = `${activeCount} 个待办 / ${tasks.length} 个任务`;
+  const activeCount = tasks.filter(task => !task.done && !task.archived).length;
+  const visibleTotal = tasks.filter(task => !task.archived).length;
+  const archivedCount = tasks.filter(task => task.archived).length;
+  count.textContent = statusFilter === "archived"
+    ? `${archivedCount} 个归档`
+    : `${activeCount} 个待办 / ${visibleTotal} 个任务`;
   emptyState.textContent = tasks.length ? "当前筛选下没有任务。" : "暂无任务。";
   emptyState.classList.toggle("show", visible.length === 0);
   clearDoneButton.disabled = busy || !tasks.some(task => task.done);
@@ -397,7 +412,8 @@ form.addEventListener("submit", event => {
       const updated = await store.update(editingId, {
         title,
         note: noteInput.value.trim(),
-        tags: parseTags(tagsInput.value)
+        tags: parseTags(tagsInput.value),
+        archived: false
       });
       tasks = tasks.map(task => task.id === editingId ? updated : task);
       exitEditMode();
@@ -411,7 +427,8 @@ form.addEventListener("submit", event => {
       tags: parseTags(tagsInput.value),
       done: false,
       position: tasks.length,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      archived: false
     });
     tasks.push(task);
     form.reset();
@@ -489,13 +506,15 @@ list.addEventListener("click", event => {
     return;
   }
 
-  const deleteButton = event.target.closest(".delete-button");
-  if (!deleteButton) return;
-  const id = deleteButton.closest(".item").dataset.id;
+  const archiveButton = event.target.closest(".archive-button");
+  if (!archiveButton) return;
+  const id = archiveButton.closest(".item").dataset.id;
+  const task = tasks.find(candidate => candidate.id === id);
+  if (!task) return;
 
   mutate(async () => {
-    await store.remove(id);
-    tasks = tasks.filter(task => task.id !== id);
+    const updated = await store.update(id, { archived: !task.archived });
+    tasks = tasks.map(candidate => candidate.id === id ? updated : candidate);
     if (editingId === id) exitEditMode();
   });
 });
