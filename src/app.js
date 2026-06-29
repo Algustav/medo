@@ -7,6 +7,7 @@ const AUTO_SYNC_DEBOUNCE_MS = 2500;
 const AUTO_SYNC_MIN_INTERVAL_MS = 15000;
 const AUTO_SYNC_IDLE_INTERVAL_MS = 120000;
 const AUTO_SYNC_RETRY_AFTER_FAILURE_MS = 60000;
+const CONFIRM_EFFECT_MS = 180;
 
 const form = document.querySelector("#todoForm");
 const titleInput = document.querySelector("#todoTitle");
@@ -222,6 +223,31 @@ function setStatus(detail) {
   syncStatus.textContent = statusText(detail);
 }
 
+function restoreScrollPosition(x, y) {
+  requestAnimationFrame(() => {
+    window.scrollTo(x, y);
+  });
+}
+
+function playTaskConfirm(item, control) {
+  if (!item) return Promise.resolve();
+
+  item.classList.remove("is-confirming");
+  control?.classList.remove("is-confirming-control");
+  // 触发重绘，确保连续点击同一任务时动画仍会重新播放。
+  item.getBoundingClientRect();
+  item.classList.add("is-confirming");
+  control?.classList.add("is-confirming-control");
+
+  return new Promise(resolve => {
+    window.setTimeout(() => {
+      item.classList.remove("is-confirming");
+      control?.classList.remove("is-confirming-control");
+      resolve();
+    }, CONFIRM_EFFECT_MS);
+  });
+}
+
 function showError(error) {
   console.error(error);
   syncStatus.textContent = "本地已存";
@@ -428,15 +454,19 @@ function render() {
 
 async function mutate(action) {
   if (busy) return;
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
   setBusy(true, "正在保存…");
   syncStatus.classList.remove("error");
   try {
     await action();
     render();
+    restoreScrollPosition(scrollX, scrollY);
     setStatus({ status: store.status, pending: store.pendingOps.length });
     scheduleAutoSync("mutation");
   } catch (error) {
     render();
+    restoreScrollPosition(scrollX, scrollY);
     showError(error);
     scheduleAutoSync("mutation-failed", AUTO_SYNC_RETRY_AFTER_FAILURE_MS);
   } finally {
@@ -507,6 +537,7 @@ list.addEventListener("change", event => {
   if (!task) return;
 
   mutate(async () => {
+    await playTaskConfirm(item, event.target);
     const updated = await store.update(task.id, { done: event.target.checked });
     tasks = tasks.map(candidate => candidate.id === task.id ? updated : candidate);
   });
@@ -557,6 +588,7 @@ list.addEventListener("click", event => {
     const nextImportance = task.importance >= 3 ? 1 : task.importance + 1;
 
     mutate(async () => {
+      await playTaskConfirm(importanceButton.closest(".item"), importanceButton);
       const updated = await store.update(id, { importance: nextImportance });
       tasks = tasks.map(candidate => candidate.id === id ? updated : candidate);
     });
@@ -570,6 +602,7 @@ list.addEventListener("click", event => {
   if (!task) return;
 
   mutate(async () => {
+    await playTaskConfirm(archiveButton.closest(".item"), archiveButton);
     const updated = await store.update(id, { archived: !task.archived });
     tasks = tasks.map(candidate => candidate.id === id ? updated : candidate);
     if (editingId === id) exitEditMode();

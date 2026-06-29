@@ -353,6 +353,45 @@ button.tag-filter.active {
   box-shadow: none;
 }
 
+.item.is-confirming {
+  animation: task-confirm .22s ease-out;
+}
+
+.is-confirming-control {
+  animation: control-confirm .18s ease-out;
+}
+
+@keyframes task-confirm {
+  0% {
+    border-color: color-mix(in srgb, var(--accent, #58a6ff), var(--line, #30363d) 42%);
+    background: color-mix(in srgb, var(--accent, #58a6ff), var(--panel, #161b22) 88%);
+  }
+
+  100% {
+    border-color: var(--line, #30363d);
+    background: var(--panel, #161b22);
+  }
+}
+
+@keyframes control-confirm {
+  0% {
+    transform: scale(.94);
+    filter: brightness(1.18);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item.is-confirming,
+  .is-confirming-control {
+    animation: none;
+  }
+}
+
 .item-tools {
   display: grid;
   gap: 4px;
