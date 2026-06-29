@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="./public/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="./public/favicon-16.png">
   <link rel="apple-touch-icon" href="./public/apple-touch-icon.png">
-  <link rel="stylesheet" href="./src/styles/app.css?v=20260627b">
+  <link rel="stylesheet" href="./src/styles/app.css?v=20260629d">
 </head>
 <body>
   <main class="app-shell">
@@ -48,6 +48,7 @@
     <section class="controls" aria-label="任务筛选">
       <div class="filter-tabs" id="statusFilters">
         <button class="filter active" type="button" data-status="active">待办</button>
+        <button class="filter" type="button" data-status="important" title="重要">∭</button>
         <button class="filter" type="button" data-status="all">全部</button>
         <button class="filter" type="button" data-status="done">已完成</button>
         <button class="filter" type="button" data-status="archived">归档</button>
@@ -72,7 +73,10 @@
 
   <template id="todoItemTemplate">
     <li class="item">
-      <button class="drag-handle" type="button" aria-label="拖动排序" title="拖动排序">⋮</button>
+      <div class="item-tools">
+        <button class="drag-handle" type="button" aria-label="拖动排序" title="拖动排序">⋮</button>
+        <button class="importance-button" type="button" aria-label="重要性：一级" title="重要性：一级">∫</button>
+      </div>
       <input class="check" type="checkbox">
       <div class="content">
         <strong class="title"></strong>
@@ -89,6 +93,6 @@
     </li>
   </template>
 
-  <script type="module" src="./src/app.js?v=20260627b"></script>
+  <script type="module" src="./src/app.js?v=20260629d"></script>
 </body>
 </html>

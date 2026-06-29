@@ -26,7 +26,8 @@ function mapTask(row) {
     done: Boolean(row.done),
     position: Number(row.position),
     createdAt: Number.isFinite(Number(row.created_at)) ? Number(row.created_at) : Number(row.position),
-    archived: Boolean(row.archived)
+    archived: Boolean(row.archived),
+    importance: cleanImportance(row.importance)
   };
 }
 
@@ -45,6 +46,11 @@ function cleanTags(tags) {
       .map(tag => String(tag).trim().replace(/^#/, "").toLowerCase())
       .filter(Boolean)
   )].slice(0, 8);
+}
+
+function cleanImportance(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 1 && number <= 3 ? number : 1;
 }
 
 async function ensureSchema(env) {
@@ -79,13 +85,29 @@ async function ensureSchema(env) {
   } catch {
     // 索引创建失败不影响核心读写。
   }
+
+  try {
+    await env.TODO_DB
+      .prepare("ALTER TABLE tasks ADD COLUMN importance INTEGER NOT NULL DEFAULT 1")
+      .run();
+  } catch {
+    // 已存在该列时忽略；用于让旧 D1 数据库自动补齐重要性字段。
+  }
+
+  try {
+    await env.TODO_DB
+      .prepare("CREATE INDEX IF NOT EXISTS idx_tasks_importance ON tasks(importance)")
+      .run();
+  } catch {
+    // 索引创建失败不影响核心读写。
+  }
 }
 
 export async function onRequestGet({ env }) {
   await ensureSchema(env);
 
   const result = await env.TODO_DB
-    .prepare("SELECT id, title, note, tags, done, position, created_at, archived FROM tasks ORDER BY position ASC")
+    .prepare("SELECT id, title, note, tags, done, position, created_at, archived, importance FROM tasks ORDER BY position ASC")
     .all();
 
   return json({ tasks: result.results.map(mapTask) });
@@ -109,13 +131,14 @@ export async function onRequestPost({ request, env }) {
     done: Boolean(body.done),
     position: Number.isFinite(Number(body.position)) ? Number(body.position) : 0,
     createdAt: Number.isFinite(Number(body.createdAt)) ? Number(body.createdAt) : Date.now(),
-    archived: Boolean(body.archived)
+    archived: Boolean(body.archived),
+    importance: cleanImportance(body.importance)
   };
 
   await env.TODO_DB
     .prepare(
-      `INSERT INTO tasks (id, title, note, tags, done, position, created_at, archived)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
+      `INSERT INTO tasks (id, title, note, tags, done, position, created_at, archived, importance)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
       + ` ON CONFLICT(id) DO UPDATE SET
           title = excluded.title,
           note = excluded.note,
@@ -123,7 +146,8 @@ export async function onRequestPost({ request, env }) {
           done = excluded.done,
           position = excluded.position,
           created_at = excluded.created_at,
-          archived = excluded.archived`
+          archived = excluded.archived,
+          importance = excluded.importance`
     )
     .bind(
       task.id,
@@ -133,7 +157,8 @@ export async function onRequestPost({ request, env }) {
       Number(task.done),
       task.position,
       task.createdAt,
-      Number(task.archived)
+      Number(task.archived),
+      task.importance
     )
     .run();
 
@@ -149,7 +174,7 @@ export async function onRequestPatch({ request, env }) {
   if (!id) return json({ error: "id is required" }, 400);
 
   const current = await env.TODO_DB
-    .prepare("SELECT id, title, note, tags, done, position, created_at, archived FROM tasks WHERE id = ?1")
+    .prepare("SELECT id, title, note, tags, done, position, created_at, archived, importance FROM tasks WHERE id = ?1")
     .bind(id)
     .first();
 
@@ -164,7 +189,8 @@ export async function onRequestPatch({ request, env }) {
     done: body.done === undefined ? previous.done : Boolean(body.done),
     position: body.position === undefined ? previous.position : Number(body.position),
     createdAt: body.createdAt === undefined ? previous.createdAt : Number(body.createdAt),
-    archived: body.archived === undefined ? previous.archived : Boolean(body.archived)
+    archived: body.archived === undefined ? previous.archived : Boolean(body.archived),
+    importance: body.importance === undefined ? previous.importance : cleanImportance(body.importance)
   };
 
   if (!task.title || !Number.isFinite(task.position) || !Number.isFinite(task.createdAt)) {
@@ -174,7 +200,7 @@ export async function onRequestPatch({ request, env }) {
   await env.TODO_DB
     .prepare(
       `UPDATE tasks
-       SET title = ?2, note = ?3, tags = ?4, done = ?5, position = ?6, created_at = ?7, archived = ?8
+       SET title = ?2, note = ?3, tags = ?4, done = ?5, position = ?6, created_at = ?7, archived = ?8, importance = ?9
        WHERE id = ?1`
     )
     .bind(
@@ -185,7 +211,8 @@ export async function onRequestPatch({ request, env }) {
       Number(task.done),
       task.position,
       task.createdAt,
-      Number(task.archived)
+      Number(task.archived),
+      task.importance
     )
     .run();
 

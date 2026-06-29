@@ -15,6 +15,11 @@ function normalizeTag(tag) {
   return String(tag).trim().replace(/^#/, "").toLowerCase();
 }
 
+function normalizeImportance(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 1 && number <= 3 ? number : 1;
+}
+
 function normalizeTask(task, index = 0) {
   const fallbackCreatedAt = Number.isFinite(Number(task.position)) ? Number(task.position) : index;
   return {
@@ -25,7 +30,8 @@ function normalizeTask(task, index = 0) {
     done: Boolean(task.done),
     position: Number.isFinite(Number(task.position)) ? Number(task.position) : index,
     createdAt: Number.isFinite(Number(task.createdAt)) ? Number(task.createdAt) : fallbackCreatedAt,
-    archived: Boolean(task.archived)
+    archived: Boolean(task.archived),
+    importance: normalizeImportance(task.importance)
   };
 }
 

@@ -1,4 +1,4 @@
-import { TaskStore } from "./store.js?v=20260627b";
+import { TaskStore } from "./store.js?v=20260629a";
 import { initThemeSelector } from "./ui/page-theme.js?v=20260625o";
 
 const store = new TaskStore();
@@ -36,6 +36,16 @@ const SORT_META = {
   newest: { label: "排序：新任务在前", symbol: "∨" },
   oldest: { label: "排序：旧任务在前", symbol: "∧" },
   manual: { label: "排序：手动排序", symbol: "⋮⋮" }
+};
+const IMPORTANCE_SYMBOLS = {
+  1: "∫",
+  2: "∬",
+  3: "∭"
+};
+const IMPORTANCE_LABELS = {
+  1: "重要性：一级",
+  2: "重要性：二级",
+  3: "重要性：三级"
 };
 
 let tasks = [];
@@ -83,6 +93,13 @@ function sortedTasks(source = tasks) {
 }
 
 function visibleTasks() {
+  if (statusFilter === "important") {
+    return [...tasks]
+      .filter(task => !task.done && !task.archived && task.importance > 1)
+      .filter(task => !tagFilter || task.tags.some(tag => tag.toLowerCase() === tagFilter))
+      .sort((a, b) => b.importance - a.importance || b.createdAt - a.createdAt);
+  }
+
   return sortedTasks().filter(task => {
     const matchesStatus =
       (statusFilter === "all" && !task.archived) ||
@@ -322,6 +339,23 @@ function startEdit(task) {
   titleInput.focus();
 }
 
+function alignImportanceButton(item) {
+  const tags = item.querySelector(".tags");
+  const tools = item.querySelector(".item-tools");
+  const handle = item.querySelector(".drag-handle");
+  const importanceButton = item.querySelector(".importance-button");
+  if (!tags || !tools || !handle || !importanceButton) return;
+
+  const gap = Number.parseFloat(getComputedStyle(tools).rowGap) || 0;
+  const tag = tags.querySelector(".tag");
+  const tagRect = (tag || tags).getBoundingClientRect();
+  const handleRect = handle.getBoundingClientRect();
+  const buttonHeight = importanceButton.getBoundingClientRect().height;
+  const tagCenter = tagRect.top + tagRect.height / 2;
+  const offset = Math.max(0, tagCenter - buttonHeight / 2 - handleRect.bottom - gap);
+  importanceButton.style.setProperty("--importance-offset", `${Math.round(offset)}px`);
+}
+
 function render() {
   const visible = visibleTasks();
   list.replaceChildren();
@@ -331,10 +365,17 @@ function render() {
     item.dataset.id = task.id;
     item.classList.toggle("done", task.done);
     item.classList.toggle("archived", task.archived);
+    item.dataset.importance = task.importance;
 
     const check = item.querySelector(".check");
     check.checked = task.done;
     check.setAttribute("aria-label", `${task.done ? "恢复" : "完成"}：${task.title}`);
+
+    const importanceButton = item.querySelector(".importance-button");
+    importanceButton.textContent = IMPORTANCE_SYMBOLS[task.importance];
+    importanceButton.className = `importance-button importance-${task.importance}`;
+    importanceButton.setAttribute("aria-label", IMPORTANCE_LABELS[task.importance]);
+    importanceButton.title = `${IMPORTANCE_LABELS[task.importance]}，点击切换`;
 
     const archiveButton = item.querySelector(".archive-button");
     archiveButton.textContent = task.archived ? "⇱" : "⇲";
@@ -367,6 +408,7 @@ function render() {
     });
 
     list.append(item);
+    alignImportanceButton(item);
   });
 
   const activeCount = tasks.filter(task => !task.done && !task.archived).length;
@@ -428,7 +470,8 @@ form.addEventListener("submit", event => {
       done: false,
       position: tasks.length,
       createdAt: Date.now(),
-      archived: false
+      archived: false,
+      importance: 1
     });
     tasks.push(task);
     form.reset();
@@ -503,6 +546,20 @@ list.addEventListener("click", event => {
   const cancelButton = event.target.closest(".cancel-tags");
   if (cancelButton) {
     cancelButton.closest(".tag-editor").hidden = true;
+    return;
+  }
+
+  const importanceButton = event.target.closest(".importance-button");
+  if (importanceButton) {
+    const id = importanceButton.closest(".item").dataset.id;
+    const task = tasks.find(candidate => candidate.id === id);
+    if (!task) return;
+    const nextImportance = task.importance >= 3 ? 1 : task.importance + 1;
+
+    mutate(async () => {
+      const updated = await store.update(id, { importance: nextImportance });
+      tasks = tasks.map(candidate => candidate.id === id ? updated : candidate);
+    });
     return;
   }
 
