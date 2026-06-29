@@ -223,7 +223,12 @@ function setStatus(detail) {
   syncStatus.textContent = statusText(detail);
 }
 
-function restoreScrollPosition(x, y) {
+function restoreScrollPosition(x, y, minDocumentHeight = 0) {
+  if (minDocumentHeight > 0) {
+    const currentMinHeight = Number.parseFloat(document.body.style.minHeight) || 0;
+    document.body.style.minHeight = `${Math.max(currentMinHeight, minDocumentHeight)}px`;
+  }
+
   requestAnimationFrame(() => {
     window.scrollTo(x, y);
   });
@@ -456,17 +461,18 @@ async function mutate(action) {
   if (busy) return;
   const scrollX = window.scrollX;
   const scrollY = window.scrollY;
+  const documentHeight = document.documentElement.scrollHeight;
   setBusy(true, "正在保存…");
   syncStatus.classList.remove("error");
   try {
     await action();
     render();
-    restoreScrollPosition(scrollX, scrollY);
+    restoreScrollPosition(scrollX, scrollY, documentHeight);
     setStatus({ status: store.status, pending: store.pendingOps.length });
     scheduleAutoSync("mutation");
   } catch (error) {
     render();
-    restoreScrollPosition(scrollX, scrollY);
+    restoreScrollPosition(scrollX, scrollY, documentHeight);
     showError(error);
     scheduleAutoSync("mutation-failed", AUTO_SYNC_RETRY_AFTER_FAILURE_MS);
   } finally {
