@@ -257,11 +257,7 @@ export class TaskStore extends EventTarget {
   }
 
   async load() {
-    try {
-      return await this.sync();
-    } catch {
-      return this.snapshot();
-    }
+    return this.snapshot();
   }
 
   applyCloudOperation(op) {

@@ -1,4 +1,4 @@
-import { TaskStore } from "./store.js?v=20260629a";
+import { TaskStore } from "./store.js?v=20260710a";
 import { initThemeSelector } from "./ui/page-theme.js?v=20260625o";
 
 const store = new TaskStore();
@@ -775,7 +775,7 @@ async function start() {
     tasks = await store.load();
     render();
     setStatus({ status: store.status, pending: store.pendingOps.length });
-    scheduleAutoSync("startup", 1200);
+    scheduleAutoSync("startup", 300);
   } finally {
     setBusy(false);
   }

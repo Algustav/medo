@@ -53,59 +53,7 @@ function cleanImportance(value) {
   return Number.isInteger(number) && number >= 1 && number <= 3 ? number : 1;
 }
 
-async function ensureSchema(env) {
-  try {
-    await env.TODO_DB
-      .prepare("ALTER TABLE tasks ADD COLUMN created_at REAL NOT NULL DEFAULT 0")
-      .run();
-  } catch {
-    // 已存在该列时忽略；用于让旧 D1 数据库自动补齐排序字段。
-  }
-
-  try {
-    await env.TODO_DB
-      .prepare("CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at)")
-      .run();
-  } catch {
-    // 索引创建失败不影响核心读写。
-  }
-
-  try {
-    await env.TODO_DB
-      .prepare("ALTER TABLE tasks ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
-      .run();
-  } catch {
-    // 已存在该列时忽略；用于让旧 D1 数据库自动补齐归档字段。
-  }
-
-  try {
-    await env.TODO_DB
-      .prepare("CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks(archived)")
-      .run();
-  } catch {
-    // 索引创建失败不影响核心读写。
-  }
-
-  try {
-    await env.TODO_DB
-      .prepare("ALTER TABLE tasks ADD COLUMN importance INTEGER NOT NULL DEFAULT 1")
-      .run();
-  } catch {
-    // 已存在该列时忽略；用于让旧 D1 数据库自动补齐重要性字段。
-  }
-
-  try {
-    await env.TODO_DB
-      .prepare("CREATE INDEX IF NOT EXISTS idx_tasks_importance ON tasks(importance)")
-      .run();
-  } catch {
-    // 索引创建失败不影响核心读写。
-  }
-}
-
 export async function onRequestGet({ env }) {
-  await ensureSchema(env);
-
   const result = await env.TODO_DB
     .prepare("SELECT id, title, note, tags, done, position, created_at, archived, importance FROM tasks ORDER BY position ASC")
     .all();
@@ -114,8 +62,6 @@ export async function onRequestGet({ env }) {
 }
 
 export async function onRequestPost({ request, env }) {
-  await ensureSchema(env);
-
   const body = await requestBody(request);
   const title = String(body?.title || "").trim();
 
@@ -166,8 +112,6 @@ export async function onRequestPost({ request, env }) {
 }
 
 export async function onRequestPatch({ request, env }) {
-  await ensureSchema(env);
-
   const body = await requestBody(request);
   const id = String(body?.id || "");
 
