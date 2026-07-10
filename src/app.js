@@ -229,8 +229,12 @@ function restoreScrollPosition(x, y, minDocumentHeight = 0) {
     document.body.style.minHeight = `${Math.max(currentMinHeight, minDocumentHeight)}px`;
   }
 
+  const restore = () => window.scrollTo(x, y);
+
   requestAnimationFrame(() => {
-    window.scrollTo(x, y);
+    restore();
+    requestAnimationFrame(restore);
+    window.setTimeout(restore, 80);
   });
 }
 
@@ -543,6 +547,7 @@ list.addEventListener("change", event => {
   if (!task) return;
 
   mutate(async () => {
+    event.target.blur();
     await playTaskConfirm(item, event.target);
     const updated = await store.update(task.id, { done: event.target.checked });
     tasks = tasks.map(candidate => candidate.id === task.id ? updated : candidate);
@@ -594,6 +599,7 @@ list.addEventListener("click", event => {
     const nextImportance = task.importance >= 3 ? 1 : task.importance + 1;
 
     mutate(async () => {
+      importanceButton.blur();
       await playTaskConfirm(importanceButton.closest(".item"), importanceButton);
       const updated = await store.update(id, { importance: nextImportance });
       tasks = tasks.map(candidate => candidate.id === id ? updated : candidate);
@@ -608,6 +614,7 @@ list.addEventListener("click", event => {
   if (!task) return;
 
   mutate(async () => {
+    archiveButton.blur();
     await playTaskConfirm(archiveButton.closest(".item"), archiveButton);
     const updated = await store.update(id, { archived: !task.archived });
     tasks = tasks.map(candidate => candidate.id === id ? updated : candidate);
