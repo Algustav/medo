@@ -1,4 +1,4 @@
-import { TaskStore } from "./store.js?v=20260710a";
+import { TaskStore } from "./store.js?v=20260803b";
 import { initThemeSelector } from "./ui/page-theme.js?v=20260625o";
 
 const store = new TaskStore();
@@ -221,6 +221,20 @@ function statusText(detail = {}) {
 function setStatus(detail) {
   syncStatus.classList.remove("error");
   syncStatus.textContent = statusText(detail);
+}
+
+async function loadArchivedTasks() {
+  if (busy) return;
+  setBusy(true, "正在载入归档…");
+  try {
+    tasks = await store.sync("archived");
+    render();
+    setStatus({ status: store.status, pending: store.pendingOps.length });
+  } catch (error) {
+    showError(error);
+  } finally {
+    setBusy(false);
+  }
 }
 
 function restoreScrollPosition(x, y, minDocumentHeight = 0) {
@@ -652,6 +666,7 @@ statusFilters.addEventListener("click", event => {
     filter.classList.toggle("active", filter === button);
   });
   render();
+  if (statusFilter === "archived") loadArchivedTasks();
 });
 
 sortButton.addEventListener("click", () => {
@@ -684,7 +699,7 @@ syncButton.addEventListener("click", async () => {
   if (busy) return;
   setBusy(true, "正在同步…");
   try {
-    tasks = await store.sync();
+    tasks = await store.sync(statusFilter === "archived" ? "archived" : "active");
     render();
     setStatus({ status: store.status, pending: store.pendingOps.length });
   } catch (error) {

@@ -130,10 +130,11 @@ function compactOps(ops) {
 }
 
 async function apiRequest(options = {}) {
-  const response = await fetch("/api/tasks", {
+  const { endpoint = "/api/tasks", ...fetchOptions } = options;
+  const response = await fetch(endpoint, {
     headers: { "Content-Type": "application/json" },
     cache: "no-store",
-    ...options
+    ...fetchOptions
   });
 
   if (!response.ok) {
@@ -236,19 +237,35 @@ export class TaskStore extends EventTarget {
     }
   }
 
-  async refreshFromCloud() {
-    const data = await apiRequest();
-    this.localTasks = (data.tasks || []).map(normalizeTask);
+  async refreshFromCloud(scope = "active") {
+    const data = await apiRequest({
+      endpoint: scope === "archived" ? "/api/tasks?archived=1" : "/api/tasks"
+    });
+    const incomingTasks = (data.tasks || []).map(normalizeTask);
+    const incomingIds = new Set(incomingTasks.map(task => task.id));
+
+    if (scope === "archived") {
+      this.localTasks = [
+        ...this.localTasks.filter(task => !task.archived && !incomingIds.has(task.id)),
+        ...incomingTasks
+      ];
+    } else {
+      this.localTasks = [
+        ...incomingTasks,
+        ...this.localTasks.filter(task => task.archived && !incomingIds.has(task.id))
+      ];
+    }
+
     this.saveLocal();
     return this.snapshot();
   }
 
-  async sync() {
+  async sync(scope = "active") {
     try {
       this.mode = "cloud";
       this.emitStatus();
       await this.flushPending();
-      return await this.refreshFromCloud();
+      return await this.refreshFromCloud(scope);
     } catch (error) {
       this.mode = "local";
       this.emitStatus();
