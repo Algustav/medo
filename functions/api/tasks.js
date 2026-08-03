@@ -53,9 +53,14 @@ function cleanImportance(value) {
   return Number.isInteger(number) && number >= 1 && number <= 3 ? number : 1;
 }
 
-export async function onRequestGet({ env }) {
+export async function onRequestGet({ request, env }) {
+  const url = new URL(request.url);
+  const archivedOnly = url.searchParams.get("archived") === "1";
+  const includeAll = url.searchParams.get("all") === "1";
+  const where = includeAll ? "" : archivedOnly ? " WHERE archived = 1" : " WHERE archived = 0";
+
   const result = await env.TODO_DB
-    .prepare("SELECT id, title, note, tags, done, position, created_at, archived, importance FROM tasks ORDER BY position ASC")
+    .prepare(`SELECT id, title, note, tags, done, position, created_at, archived, importance FROM tasks${where} ORDER BY position ASC`)
     .all();
 
   return json({ tasks: result.results.map(mapTask) });
