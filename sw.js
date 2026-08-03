@@ -1,13 +1,12 @@
-const CACHE_NAME = "medo-v31";
+const CACHE_NAME = "medo-v27";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./manifest.webmanifest",
-  "./src/app.js?v=20260803a",
-  "./src/store.js?v=20260803a",
+  "./src/app.js?v=20260710a",
+  "./src/store.js?v=20260710a",
   "./src/ui/theme.js?v=20260625o",
   "./src/ui/page-theme.js?v=20260625o",
-  "./src/styles/app.css?v=20260803b",
+  "./src/styles/app.css?v=20260629h",
   "./public/favicon.ico",
   "./public/favicon-16.png",
   "./public/favicon-32.png",
@@ -18,31 +17,6 @@ const APP_SHELL = [
   "./public/icon-192.png",
   "./public/icon-512.png"
 ];
-
-function cacheFirst(request) {
-  return caches.match(request)
-    .then(cached => cached || fetch(request)
-      .then(response => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-        return response;
-      }));
-}
-
-function staleWhileRevalidate(request) {
-  return caches.match(request)
-    .then(cached => {
-      const fresh = fetch(request)
-        .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-          return response;
-        })
-        .catch(() => cached || caches.match("./index.html"));
-
-      return cached || fresh;
-    });
-}
 
 self.addEventListener("install", event => {
   event.waitUntil(
@@ -70,10 +44,13 @@ self.addEventListener("fetch", event => {
   if (url.pathname.startsWith("/api/")) return;
   if (event.request.method !== "GET") return;
 
-  if (event.request.mode === "navigate") {
-    event.respondWith(staleWhileRevalidate("./index.html"));
-    return;
-  }
-
-  event.respondWith(cacheFirst(event.request));
+  event.respondWith(
+    fetch(event.request)
+      .then(response => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request).then(cached => cached || caches.match("./index.html")))
+  );
 });
