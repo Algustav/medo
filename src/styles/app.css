@@ -589,6 +589,15 @@ button.tag-filter.active {
   display: block;
 }
 
+.app-version {
+  padding: 8px 0 2px;
+  color: color-mix(in srgb, var(--muted, #8b949e), transparent 18%);
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-align: center;
+  user-select: none;
+}
+
 @media (max-width: 620px) {
   body {
     padding: 12px 10px;

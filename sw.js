@@ -1,4 +1,4 @@
-const CACHE_NAME = "medo-v30";
+const CACHE_NAME = "medo-v31";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,7 +7,7 @@ const APP_SHELL = [
   "./src/store.js?v=20260803a",
   "./src/ui/theme.js?v=20260625o",
   "./src/ui/page-theme.js?v=20260625o",
-  "./src/styles/app.css?v=20260629h",
+  "./src/styles/app.css?v=20260803b",
   "./public/favicon.ico",
   "./public/favicon-16.png",
   "./public/favicon-32.png",
