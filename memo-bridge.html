@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>meDo → meMo</title>
+  <style>
+    :root { color-scheme: light dark; font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", sans-serif; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: Canvas; color: CanvasText; }
+    main { width: min(30rem, calc(100vw - 3rem)); padding: 2rem; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 1rem; text-align: center; }
+    p { line-height: 1.7; color: color-mix(in srgb, CanvasText 68%, transparent); }
+    button { padding: .65rem 1rem; border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); border-radius: .5rem; background: ButtonFace; color: ButtonText; font: inherit; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>正在连接 meMo</h1>
+    <p id="status">正在读取带有 memo 标签的项目……</p>
+    <button id="close" type="button" hidden>关闭窗口</button>
+  </main>
+  <script>
+    (() => {
+      "use strict";
+      const TARGET_ORIGIN = "http://localhost:43117";
+      const status = document.querySelector("#status");
+      const closeButton = document.querySelector("#close");
+      const taggedMemo = (task) => (Array.isArray(task?.tags) ? task.tags : [])
+        .some((tag) => String(tag).trim().replace(/^#+/, "").toLowerCase() === "memo");
+
+      async function loadScope(archived) {
+        const response = await fetch(`/api/tasks${archived ? "?archived=1" : ""}`, {
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { Accept: "application/json" }
+        });
+        if (!response.ok) throw new Error(`meDo 接口返回 ${response.status}`);
+        const data = await response.json();
+        if (!Array.isArray(data.tasks)) throw new Error("meDo 返回的数据结构不正确");
+        return data.tasks;
+      }
+
+      function send(message) {
+        if (!window.opener || window.opener.closed) throw new Error("未找到 meMo 窗口，请从 meMo 的拉取按钮重新打开");
+        window.opener.postMessage({ source: "memo-medo-bridge", ...message }, TARGET_ORIGIN);
+      }
+
+      closeButton.addEventListener("click", () => window.close());
+      Promise.all([loadScope(false), loadScope(true)])
+        .then(([active, archived]) => {
+          const tasks = [...new Map([...active, ...archived]
+            .filter(taggedMemo)
+            .map((task) => [String(task?.id || ""), task])).values()];
+          send({ ok: true, tasks });
+          status.textContent = `已向 meMo 发送 ${tasks.length} 个项目，可以关闭此窗口。`;
+          closeButton.hidden = false;
+          setTimeout(() => window.close(), 700);
+        })
+        .catch((error) => {
+          try { send({ ok: false, error: error.message || "无法读取 meDo" }); } catch {}
+          status.textContent = `${error.message || "无法读取 meDo"}。请关闭窗口后重试。`;
+          closeButton.hidden = false;
+        });
+    })();
+  </script>
+</body>
+</html>
