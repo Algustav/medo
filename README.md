@@ -61,6 +61,8 @@ Settings → Bindings → Add binding → D1 database
 
 保存后重新部署一次。Pages Functions 会通过 `functions/api/tasks.js` 暴露 `/api/tasks`，前端会自动使用它同步数据。
 
+该只读接口允许 `http://localhost:43117` 在携带 Cloudflare Access Cookie 时读取任务，供本地 meMo 拉取带有 `memo` 标签的项目。CORS 仅开放 `GET/OPTIONS`，新增、修改和删除接口不向该来源开放。
+
 ## 离线同步说明
 
 页面会缓存静态资源，所以部署后访问过一次，之后断网也能打开。任务数据会先写入本地：

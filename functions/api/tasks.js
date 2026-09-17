@@ -2,12 +2,29 @@ const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": "no-store"
 };
+const MEMO_ORIGINS = new Set(["http://localhost:43117"]);
 
-function json(data, status = 200) {
+function corsHeaders(request) {
+  const origin = request?.headers.get("Origin") || "";
+  if (!MEMO_ORIGINS.has(origin)) return {};
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Accept",
+    "Vary": "Origin"
+  };
+}
+
+function json(data, status = 200, request) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: JSON_HEADERS
+    headers: { ...JSON_HEADERS, ...corsHeaders(request) }
   });
+}
+
+export function onRequestOptions({ request }) {
+  return new Response(null, { status: 204, headers: corsHeaders(request) });
 }
 
 function mapTask(row) {
@@ -62,7 +79,7 @@ export async function onRequestGet({ request, env }) {
     .prepare(`SELECT id, title, note, tags, done, position, created_at, archived, importance FROM tasks${where} ORDER BY position ASC`)
     .all();
 
-  return json({ tasks: result.results.map(mapTask) });
+  return json({ tasks: result.results.map(mapTask) }, 200, request);
 }
 
 export async function onRequestPost({ request, env }) {
