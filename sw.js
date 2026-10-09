@@ -1,4 +1,4 @@
-const CACHE_NAME = "medo-v29";
+const CACHE_NAME = "medo-v30";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -53,7 +53,7 @@ self.addEventListener("fetch", event => {
   // Never return HTML as a fallback for a missing script or stylesheet.
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(isEntry ? INDEX_URL.href : request);
+    const cached = await cache.match(isEntry ? ENTRY_URL.href : request);
     if (cached) return cached;
     // Do not overwrite the installed shell with redirects/login pages.
     return fetch(request);
