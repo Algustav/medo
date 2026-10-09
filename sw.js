@@ -1,9 +1,9 @@
-const CACHE_NAME = "medo-v28";
+const CACHE_NAME = "medo-v29";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./src/app.js?v=20260803b",
-  "./src/store.js?v=20260710a",
+  "./src/store.js?v=20260803b",
   "./src/ui/theme.js?v=20260625o",
   "./src/ui/page-theme.js?v=20260625o",
   "./src/styles/app.css?v=20260803c",
@@ -17,13 +17,14 @@ const APP_SHELL = [
   "./public/icon-192.png",
   "./public/icon-512.png"
 ];
+const SHELL_URLS = new Set(APP_SHELL.map(path => new URL(path, self.location.href).href));
+const ENTRY_URL = new URL("./", self.location.href);
+const INDEX_URL = new URL("./index.html", self.location.href);
 
 self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
-  );
+  // Install a complete release. Keep the active worker until its tabs close,
+  // so an open page cannot mix assets from two releases.
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
 });
 
 self.addEventListener("activate", event => {
@@ -31,7 +32,7 @@ self.addEventListener("activate", event => {
     caches.keys()
       .then(keys => Promise.all(
         keys
-          .filter(key => key !== CACHE_NAME)
+          .filter(key => key.startsWith("medo-v") && key !== CACHE_NAME)
           .map(key => caches.delete(key))
       ))
       .then(() => self.clients.claim())
@@ -39,18 +40,22 @@ self.addEventListener("activate", event => {
 });
 
 self.addEventListener("fetch", event => {
-  const url = new URL(event.request.url);
-
+  const request = event.request;
+  const url = new URL(request.url);
+  if (request.method !== "GET" || url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
-  if (event.request.method !== "GET") return;
 
-  event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-        return response;
-      })
-      .catch(() => caches.match(event.request).then(cached => cached || caches.match("./index.html")))
-  );
+  const isEntry = request.mode === "navigate" &&
+    (url.pathname === ENTRY_URL.pathname || url.pathname === INDEX_URL.pathname);
+  if (!isEntry && !SHELL_URLS.has(url.href)) return;
+
+  // Query parameters (e.g. ?theme=...) do not change the entry document.
+  // Never return HTML as a fallback for a missing script or stylesheet.
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(isEntry ? INDEX_URL.href : request);
+    if (cached) return cached;
+    // Do not overwrite the installed shell with redirects/login pages.
+    return fetch(request);
+  })());
 });
