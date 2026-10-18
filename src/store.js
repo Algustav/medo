@@ -138,7 +138,10 @@ async function apiRequest(options = {}) {
   });
 
   if (!response.ok) {
-    throw new Error(`API ${response.status}`);
+    const detail = await response.json().catch(() => null);
+    const error = new Error(detail?.error || `同步失败（HTTP ${response.status}）`);
+    error.validationError = response.status === 422;
+    throw error;
   }
 
   return response.status === 204 ? null : response.json();

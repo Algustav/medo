@@ -1,4 +1,4 @@
-import { TaskStore } from "./store.js?v=20260803b";
+import { TaskStore } from "./store.js?v=20261018a";
 import { initThemeSelector } from "./ui/page-theme.js?v=20260625o";
 
 const store = new TaskStore();
@@ -12,6 +12,22 @@ const CONFIRM_EFFECT_MS = 180;
 const form = document.querySelector("#todoForm");
 const titleInput = document.querySelector("#todoTitle");
 const noteInput = document.querySelector("#todoNote");
+const NOTE_LIMIT = 20000;
+const noteLimitHint = document.querySelector("#noteLimitHint");
+function validateNote() {
+  const length = Array.from(noteInput.value).length;
+  const over = length > NOTE_LIMIT;
+  noteLimitHint.textContent = over
+    ? `备注已输入 ${length.toLocaleString()} 字，超过 20,000 字上限，请删减 ${(length - NOTE_LIMIT).toLocaleString()} 字后再保存。原文仍保留在输入框。`
+    : `备注 ${length.toLocaleString()} / 20,000 字`;
+  noteLimitHint.style.color = over ? "var(--danger)" : "var(--muted)";
+  noteInput.setCustomValidity(over ? "备注不能超过 20,000 字，请删减后再保存。" : "");
+  noteInput.setAttribute("aria-invalid", String(over));
+  return !over;
+}
+noteInput.addEventListener("input", validateNote);
+form.addEventListener("reset", () => queueMicrotask(validateNote));
+
 const tagsInput = document.querySelector("#todoTags");
 const list = document.querySelector("#todoList");
 const template = document.querySelector("#todoItemTemplate");
@@ -273,7 +289,9 @@ function playTaskConfirm(item, control) {
 
 function showError(error) {
   console.error(error);
-  syncStatus.textContent = "本地已存";
+  syncStatus.textContent = error?.validationError
+    ? `${error.message}；本地内容保留，未同步，请编辑后重试`
+    : "保存或同步失败，请重试（原内容保留）";
   syncStatus.classList.add("error");
 }
 
@@ -316,7 +334,8 @@ async function runAutoSync(reason = "auto", { force = false } = {}) {
     setStatus({ status: store.status, pending: store.pendingOps.length });
   } catch (error) {
     lastAutoSyncFailedAt = Date.now();
-    setStatus({ status: store.status, pending: store.pendingOps.length });
+    if (error.validationError) showError(error);
+    else setStatus({ status: store.status, pending: store.pendingOps.length });
   } finally {
     autoSyncInFlight = false;
     syncButton.disabled = busy;
@@ -382,6 +401,7 @@ function startEdit(task) {
   editingId = task.id;
   titleInput.value = task.title;
   noteInput.value = task.note;
+  validateNote();
   tagsInput.value = task.tags.join(", ");
   tagSuggestions.hidden = true;
   renderComposerMode();
@@ -502,6 +522,10 @@ form.addEventListener("submit", event => {
   event.preventDefault();
   const title = titleInput.value.trim();
   if (!title) return;
+  if (!validateNote()) {
+    noteInput.reportValidity();
+    return;
+  }
 
   mutate(async () => {
     if (editingId) {

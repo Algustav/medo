@@ -1,3 +1,4 @@
+const NOTE_LIMIT = 20000;
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=utf-8",
   "Cache-Control": "no-store"
@@ -82,8 +83,17 @@ export async function onRequestGet({ request, env }) {
   return json({ tasks: result.results.map(mapTask) }, 200, request);
 }
 
+function noteLimitError(body) {
+  if (body?.note !== undefined && Array.from(String(body.note || "")).length > NOTE_LIMIT) {
+    return json({ error: "备注不能超过 20,000 字", code: "NOTE_TOO_LONG", field: "note", maxLength: NOTE_LIMIT }, 422);
+  }
+  return null;
+}
+
 export async function onRequestPost({ request, env }) {
   const body = await requestBody(request);
+  const limitError = noteLimitError(body);
+  if (limitError) return limitError;
   const title = String(body?.title || "").trim();
 
   if (!body?.id || !title) {
@@ -93,7 +103,7 @@ export async function onRequestPost({ request, env }) {
   const task = {
     id: String(body.id),
     title: title.slice(0, 200),
-    note: String(body.note || "").trim().slice(0, 2000),
+    note: String(body.note || "").trim(),
     tags: cleanTags(body.tags),
     done: Boolean(body.done),
     position: Number.isFinite(Number(body.position)) ? Number(body.position) : 0,
@@ -134,6 +144,8 @@ export async function onRequestPost({ request, env }) {
 
 export async function onRequestPatch({ request, env }) {
   const body = await requestBody(request);
+  const limitError = noteLimitError(body);
+  if (limitError) return limitError;
   const id = String(body?.id || "");
 
   if (!id) return json({ error: "id is required" }, 400);
@@ -149,7 +161,7 @@ export async function onRequestPatch({ request, env }) {
   const task = {
     ...previous,
     title: body.title === undefined ? previous.title : String(body.title).trim().slice(0, 200),
-    note: body.note === undefined ? previous.note : String(body.note).trim().slice(0, 2000),
+    note: body.note === undefined ? previous.note : String(body.note).trim(),
     tags: body.tags === undefined ? previous.tags : cleanTags(body.tags),
     done: body.done === undefined ? previous.done : Boolean(body.done),
     position: body.position === undefined ? previous.position : Number(body.position),

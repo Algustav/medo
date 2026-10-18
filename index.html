@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="./public/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="./public/favicon-16.png">
   <link rel="apple-touch-icon" href="./public/apple-touch-icon.png">
-  <link rel="stylesheet" href="./src/styles/app.css?v=20260803c">
+  <link rel="stylesheet" href="./src/styles/app.css?v=20261018a">
 </head>
 <body>
   <main class="app-shell">
@@ -30,7 +30,7 @@
       <div class="fields">
         <input id="todoTitle" name="title" autocomplete="off" maxlength="200" placeholder="新增任务" required>
         <div class="composer-detail-row">
-          <textarea id="todoNote" name="note" maxlength="2000" placeholder="添加备注"></textarea>
+          <textarea id="todoNote" name="note" aria-describedby="noteLimitHint" placeholder="添加备注"></textarea>
           <div class="composer-side">
             <div class="tag-input-wrap">
               <input id="todoTags" name="tags" autocomplete="off" maxlength="200" placeholder="添加标签">
@@ -43,6 +43,7 @@
           </div>
         </div>
       </div>
+      <p id="noteLimitHint" role="status" aria-live="polite" style="margin: 6px 0 0; font-size: 12px; color: var(--muted)">备注最多 20,000 字，超出后不会保存。</p>
     </form>
 
     <section class="controls" aria-label="任务筛选">
@@ -70,7 +71,7 @@
     <ol class="list" id="todoList"></ol>
     <div class="empty" id="emptyState">暂无任务。</div>
 
-    <footer class="app-version" aria-label="当前版本">meDo v2026.10.09.1</footer>
+    <footer class="app-version" aria-label="当前版本">meDo v2026.10.18.1</footer>
   </main>
 
   <template id="todoItemTemplate">
@@ -95,6 +96,6 @@
     </li>
   </template>
 
-  <script type="module" src="./src/app.js?v=20260803b"></script>
+  <script type="module" src="./src/app.js?v=20261018a"></script>
 </body>
 </html>
