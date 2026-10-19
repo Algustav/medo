@@ -30,6 +30,9 @@ export async function receive(request, env) {
   catch { return reply('Invalid UTF-8', 400); }
   if (!text.trim() || !/(?:^|\n)==========\s*$/.test(text)) return reply('Incomplete clipping; retry after Kindle finishes saving', 422);
   if (Array.from(text).length > 20000) return reply('Batch exceeds 20,000 characters; checkpoint unchanged', 413);
+  // Kindle metadata uses #912 for locations; meMo treats these as inline tags.
+  // Only remove hashes before numeric locations on metadata lines, not book text.
+  const note = text.replace(/^(-[^\r\n]*\|[^\r\n]*)$/gm, line => line.replace(/#(?=\d)/g, ''));
   const end = offset + length;
   if (!Number.isSafeInteger(end)) return reply('Invalid offset', 400);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -45,7 +48,7 @@ export async function receive(request, env) {
     db.prepare(`INSERT OR IGNORE INTO tasks (id, title, note, tags, done, position, created_at, archived, importance)
       SELECT ?, ?, ?, '["kclip","memo"]', 0, COALESCE((SELECT MIN(position) FROM tasks), 0) - 1, ?, 0, 1
       WHERE EXISTS (SELECT 1 FROM kclip_devices WHERE device = ? AND byte_offset = ?)`)
-      .bind(id, title, text, now, device, offset),
+      .bind(id, title, note, now, device, offset),
     db.prepare(`INSERT OR IGNORE INTO kclip_receipts (id, device, end_offset, created_at)
       SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM kclip_devices WHERE device = ? AND byte_offset = ?)`)
       .bind(id, device, end, now, device, offset),
