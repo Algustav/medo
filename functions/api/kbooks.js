@@ -10,7 +10,8 @@ export function bookFilename(title, id) {
     if (new TextEncoder().encode(stem + char).length > 160) break;
     stem += char;
   }
-  return `${stem} [${id.slice(0, 8)}].azw3`;
+  stem = stem.replace(/^(?:Kclip-)+/i, '');
+  return `Kclip-${stem} [${id.slice(0, 8)}].azw3`;
 }
 
 async function initialize(db) {

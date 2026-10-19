@@ -17,7 +17,7 @@ Pages 生产环境另设密钥 `KBOOK_UPLOAD_TOKEN`：至少 32 位随机字符�
 
 所有请求使用 Bearer 密钥及现有 Access 服务凭证。上传使用内容寻址，重复文件不重复入队；
 先写 R2 后登记 D1，失败可重试。回执按设备独立记录。已领取后不会因 Kindle 删除文件自动重发。
-R2 内以 SHA256.azw3 保存；Kindle 文件名为“书名 [8位编号].azw3”，UTF-8 长度受控并过滤路径及 FAT 非法字符。原生书库中的标题由书籍内部元数据决定。
+R2 内以 SHA256.azw3 保存；Kindle 文件名为“Kclip-书名 [8位编号].azw3”，UTF-8 长度受控并过滤路径及 FAT 非法字符。前缀只加一次；原生书库中的标题由书籍内部元数据决定。
 格式检查验证 BOOKMOBI 容器签名，并非完整的 AZW3 内容有效性验证。
 
 电脑工具为相邻 myweb+kindle/kindle-kclip/upload-book.py（仅标准库，支持 Windows/macOS/Linux）。
@@ -33,6 +33,8 @@ Kindle 增加 download.sh、sync.sh 及新版 menu.json，保留 config.sh 和�
 下载完成通过 `com.lab126.scanner reScanFile` 请求扫描该文件；失败时退回 `doFullScan`。
 另提供 KUAL 的 Refresh library 入口。扫描为异步操作，兼容性仍需 Oasis 3 实机验证。
 日志为 download-scan.txt、download-diagnostics.txt；不自动重启原生阅读器。
+KUAL 的 Kclip 子菜单按编号排列上传、下载、同步、全量重传、刷新。
+统一 notify.sh 使用现有 FBInk 和 KOReader 中文字体，按实际屏幕宽度绘制黑色横条、白色 96px 中文提示；不支持 OpenType 的旧 FBInk 降级为大号英文。显示诊断见 notify-error.txt。
 时间使用书单返回的服务端时间，不改 Kindle 系统时钟；对这台设备的 UTC FAT 挂载，
 默认 `KBOOK_FAT_OFFSET_SECONDS=28800` 修正 Windows USB 查看时少八小时的问题。
 如换用已按本地时区挂载的设备，需在 config.sh 设置该值为 0。这个兼容处理只影响书籍文件时间。
