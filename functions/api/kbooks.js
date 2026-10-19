@@ -28,19 +28,28 @@ async function initialize(db) {
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   const op = url.searchParams.get('op') || 'list';
-  if (!['list', 'upload', 'file', 'ack', 'meta'].includes(op)) return response('Unknown operation', 400);
-  const secret = op === 'upload' ? env.KBOOK_UPLOAD_TOKEN : env.KCLIP_TOKEN;
+  if (!['list', 'upload', 'file', 'ack', 'meta', 'delete'].includes(op)) return response('Unknown operation', 400);
+  const secret = ['upload', 'delete'].includes(op) ? env.KBOOK_UPLOAD_TOKEN : env.KCLIP_TOKEN;
   if (!secret || secret.length < 32) return response('Server token not configured', 503);
   if (request.headers.get('Authorization') !== `Bearer ${secret}`) return response('Unauthorized', 401);
-  const method = ['upload', 'ack'].includes(op) ? 'POST' : 'GET';
+  const method = op === 'delete' ? 'DELETE' : ['upload', 'ack'].includes(op) ? 'POST' : 'GET';
   if (request.method !== method) return response(`${method} required`, 405);
   if (!env.KINDLE_BOOKS || !env.TODO_DB) return response('Storage binding missing', 503);
   const device = url.searchParams.get('device');
   const id = url.searchParams.get('id');
   if ((op === 'list' || op === 'ack') && !deviceOK(device)) return response('Invalid device', 400);
-  if (['file', 'ack', 'meta'].includes(op) && !idOK(id)) return response('Invalid book ID', 400);
+  if (['file', 'ack', 'meta', 'delete'].includes(op) && !idOK(id)) return response('Invalid book ID', 400);
   try {
     await initialize(env.TODO_DB);
+    if (op === 'delete') {
+      // Retryable even if a previous attempt deleted R2 but failed before D1.
+      await env.KINDLE_BOOKS.delete(`${id}.azw3`);
+      await env.TODO_DB.batch([
+        env.TODO_DB.prepare('DELETE FROM kbook_receipts WHERE book_id = ?').bind(id),
+        env.TODO_DB.prepare('DELETE FROM kbooks WHERE id = ?').bind(id)
+      ]);
+      return response(`DELETED ${id}`);
+    }
     if (op === 'upload') {
       const title = (url.searchParams.get('title') || '').trim();
       if (!title || title.length > 240 || /[\x00-\x1f\x7f]/.test(title)) return response('Invalid title', 400);
