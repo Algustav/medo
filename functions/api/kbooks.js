@@ -3,6 +3,15 @@ const response = (body, status = 200, type = 'text/plain; charset=utf-8') =>
   new Response(body, { status, headers: { 'Content-Type': type, 'Cache-Control': 'no-store' } });
 const deviceOK = value => /^[A-Za-z0-9_-]{1,64}$/.test(value || '');
 const idOK = value => /^[a-f0-9]{64}$/.test(value || '');
+export function bookFilename(title, id) {
+  const clean = title.normalize('NFC').replace(/[<>:"/\\|?*\x00-\x1f\x7f]/g, '_').replace(/[. ]+$/g, '').replace(/^[. ]+/g, '') || 'Book';
+  let stem = '';
+  for (const char of clean) {
+    if (new TextEncoder().encode(stem + char).length > 160) break;
+    stem += char;
+  }
+  return `${stem} [${id.slice(0, 8)}].azw3`;
+}
 
 async function initialize(db) {
   await db.batch([
@@ -18,7 +27,7 @@ async function initialize(db) {
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   const op = url.searchParams.get('op') || 'list';
-  if (!['list', 'upload', 'file', 'ack'].includes(op)) return response('Unknown operation', 400);
+  if (!['list', 'upload', 'file', 'ack', 'meta'].includes(op)) return response('Unknown operation', 400);
   const secret = op === 'upload' ? env.KBOOK_UPLOAD_TOKEN : env.KCLIP_TOKEN;
   if (!secret || secret.length < 32) return response('Server token not configured', 503);
   if (request.headers.get('Authorization') !== `Bearer ${secret}`) return response('Unauthorized', 401);
@@ -28,7 +37,7 @@ export async function onRequest({ request, env }) {
   const device = url.searchParams.get('device');
   const id = url.searchParams.get('id');
   if ((op === 'list' || op === 'ack') && !deviceOK(device)) return response('Invalid device', 400);
-  if ((op === 'file' || op === 'ack') && !idOK(id)) return response('Invalid book ID', 400);
+  if (['file', 'ack', 'meta'].includes(op) && !idOK(id)) return response('Invalid book ID', 400);
   try {
     await initialize(env.TODO_DB);
     if (op === 'upload') {
@@ -57,13 +66,18 @@ export async function onRequest({ request, env }) {
       return response(JSON.stringify({ id: hash, title, size, queued: true }), 200, 'application/json; charset=utf-8');
     }
     if (op === 'list') {
-      const rows = await env.TODO_DB.prepare(`SELECT b.id, b.size FROM kbooks b
+      const rows = await env.TODO_DB.prepare(`SELECT b.id, b.size, b.title FROM kbooks b
         WHERE NOT EXISTS (SELECT 1 FROM kbook_receipts r WHERE r.book_id = b.id AND r.device = ?)
         ORDER BY b.created_at, b.id LIMIT 100`).bind(device).all();
+      if (url.searchParams.get('format') === '2') {
+        return response(`KBOOKS2\t${Math.floor(Date.now() / 1000)}\n` + rows.results.map(row =>
+          `${row.id}\t${row.size}\t${bookFilename(row.title, row.id)}\n`).join(''));
+      }
       return response('KBOOKS1\n' + rows.results.map(row => `${row.id}\t${row.size}\n`).join(''));
     }
     const book = await env.TODO_DB.prepare('SELECT id, title, size FROM kbooks WHERE id = ?').bind(id).first();
     if (!book) return response('Book not found', 404);
+    if (op === 'meta') return response(JSON.stringify({ ...book, filename: bookFilename(book.title, book.id) }), 200, 'application/json; charset=utf-8');
     if (op === 'file') {
       const object = await env.KINDLE_BOOKS.get(`${id}.azw3`);
       if (!object) return response('File missing', 404);
