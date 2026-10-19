@@ -79,6 +79,20 @@ export async function receive(request, env) {
   const hash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
   const id = `kclip-${device}-${offset}-${hash}`;
   const db = env.TODO_DB;
+  if (device.endsWith('-format1')) {
+    if (offset !== 0) return reply('Full upload must start at zero', 400);
+    // Reuse the original test record when present, preserving meMo's external ID.
+    const existing = await db.prepare(`SELECT t.id FROM tasks t JOIN kclip_receipts r ON r.id = t.id
+      WHERE r.device = ? ORDER BY r.created_at ASC, t.id ASC LIMIT 1`).bind(device).first();
+    const fullId = existing?.id || `kclip-full-${device}`;
+    const now = Date.now();
+    const title = `Kindle 摘录总集 · ${new Date(now + 8 * 3600000).toISOString().replace('T', ' ').slice(0, 16)}`;
+    await db.prepare(`INSERT INTO tasks (id, title, note, tags, done, position, created_at, archived, importance)
+      VALUES (?, ?, ?, '["kclip","memo"]', 0, COALESCE((SELECT MIN(position) FROM tasks), 0) - 1, ?, 0, 1)
+      ON CONFLICT(id) DO UPDATE SET title = excluded.title, note = excluded.note`)
+      .bind(fullId, title, note, now).run();
+    return reply(`OK ${end}`);
+  }
   if (await db.prepare('SELECT id FROM kclip_receipts WHERE id = ?').bind(id).first()) {
     // Explicit full-format tests can refresh the same imported record after a deployment.
     if (device.endsWith('-format1')) {
