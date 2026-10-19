@@ -79,7 +79,17 @@ export async function receive(request, env) {
   const hash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
   const id = `kclip-${device}-${offset}-${hash}`;
   const db = env.TODO_DB;
-  if (await db.prepare('SELECT id FROM kclip_receipts WHERE id = ?').bind(id).first()) return reply(`OK ${end}`);
+  if (await db.prepare('SELECT id FROM kclip_receipts WHERE id = ?').bind(id).first()) {
+    // Explicit full-format tests can refresh the same imported record after a deployment.
+    if (device.endsWith('-format1')) {
+      const task = await db.prepare('SELECT created_at FROM tasks WHERE id = ?').bind(id).first();
+      if (task) {
+        const title = `Kindle 摘录 · ${new Date(Number(task.created_at) + 8 * 3600000).toISOString().replace('T', ' ').slice(0, 16)}`;
+        await db.prepare('UPDATE tasks SET note = ?, title = ? WHERE id = ?').bind(note, title, id).run();
+      }
+    }
+    return reply(`OK ${end}`);
+  }
   await db.prepare('INSERT OR IGNORE INTO kclip_devices (device, byte_offset) VALUES (?, 0)').bind(device).run();
   const now = Date.now();
   const title = `Kindle 摘录 · ${new Date(now + 8 * 3600000).toISOString().replace('T', ' ').slice(0, 16)}`;
