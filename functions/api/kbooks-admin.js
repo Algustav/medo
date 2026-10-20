@@ -29,7 +29,12 @@ export async function authenticated(request, report = () => {}) {
     if (typeof claims.email !== 'string' || !claims.email.includes('@')) return fail('human_login_required');
     if (!cachedKeys || cachedKeys.expires < Date.now() || !cachedKeys.keys.some(k => k.kid === header.kid)) {
       stage = 'fetch_keys';
-      const response = await fetch(`${ISSUER}/cdn-cgi/access/certs`, { redirect: 'error', headers: { 'User-Agent': 'KClip-BookUploader/1.0' }, signal: AbortSignal.timeout(10000) });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      let response;
+      try {
+        response = await fetch(`${ISSUER}/cdn-cgi/access/certs`, { redirect: 'manual', headers: { 'User-Agent': 'KClip-BookUploader/1.0' }, signal: controller.signal });
+      } finally { clearTimeout(timeout); }
       if (!response.ok) return fail(`keys_http_${response.status}`);
       stage = 'parse_keys';
       const { keys } = await response.json();
@@ -42,7 +47,10 @@ export async function authenticated(request, report = () => {}) {
     const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
     const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, decode(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
     return valid || fail('invalid_signature');
-  } catch { return fail(`verification_unavailable_${stage}`); }
+  } catch (error) {
+    console.warn('kbooks-admin verification unavailable', stage, error.name, error.message);
+    return fail(`verification_unavailable_${stage}_${error.name}`);
+  }
 }
 
 export async function onRequest({ request, env }) {
