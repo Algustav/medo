@@ -14,6 +14,7 @@ export async function authenticated(request, report = () => {}) {
   const fail = reason => { report(reason); return false; };
   const token = request.headers.get('Cf-Access-Jwt-Assertion');
   if (!token || token.length > 16384) return fail('missing_assertion');
+  let stage = 'decode';
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return fail('malformed_token');
@@ -27,18 +28,21 @@ export async function authenticated(request, report = () => {}) {
         (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || claims.nbf > now))) return fail('expired_token');
     if (typeof claims.email !== 'string' || !claims.email.includes('@')) return fail('human_login_required');
     if (!cachedKeys || cachedKeys.expires < Date.now() || !cachedKeys.keys.some(k => k.kid === header.kid)) {
-      const response = await fetch(`${ISSUER}/cdn-cgi/access/certs`, { redirect: 'error', signal: AbortSignal.timeout(10000) });
-      if (!response.ok) throw new Error('Access keys unavailable');
+      stage = 'fetch_keys';
+      const response = await fetch(`${ISSUER}/cdn-cgi/access/certs`, { redirect: 'error', headers: { 'User-Agent': 'KClip-BookUploader/1.0' }, signal: AbortSignal.timeout(10000) });
+      if (!response.ok) return fail(`keys_http_${response.status}`);
+      stage = 'parse_keys';
       const { keys } = await response.json();
       if (!Array.isArray(keys)) throw new Error('Invalid Access keys');
       cachedKeys = { keys, expires: Date.now() + 300000 };
     }
     const jwk = cachedKeys.keys.find(k => k.kid === header.kid && k.kty === 'RSA');
     if (!jwk) return fail('unknown_signing_key');
+    stage = 'import_key';
     const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
     const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, decode(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
     return valid || fail('invalid_signature');
-  } catch { return fail('verification_unavailable'); }
+  } catch { return fail(`verification_unavailable_${stage}`); }
 }
 
 export async function onRequest({ request, env }) {
