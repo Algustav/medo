@@ -15,7 +15,7 @@ export function bookFilename(title, id) {
   return `Kclip-${stem} [${id.slice(0, 8)}].azw3`;
 }
 
-async function initialize(db) {
+export async function initialize(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS kbooks (
       id TEXT PRIMARY KEY, title TEXT NOT NULL, size INTEGER NOT NULL,
