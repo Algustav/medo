@@ -17,6 +17,9 @@ Pages 生产环境另设密钥 `KBOOK_UPLOAD_TOKEN`：至少 32 位随机字符�
 - DELETE `?op=delete&id=SHA256`：只接受电脑上传密钥，删除该 ID 的 R2 文件、D1 书单及所有设备领取记录；重复请求安全。
 - POST `?op=ticket`：电脑上传密钥，JSON `{ "title": "书名" }`，签发 30 分钟、最大 5 MiB 的单书临时凭证；原始凭证仅返回一次，D1 仅保存 SHA256。
 - POST `?op=redeem`：以临时凭证作为 Bearer，发送 AZW3 原始字节。凭证原子绑定首个有效文件的 SHA256，相同文件在有效期内可重试，其他文件拒绝；不可查询、删除或签发凭证。
+- POST `?op=publisher`：电脑管理密钥签发长期上传专用密钥，JSON label；返回原始密钥一次，D1 仅存校验值。不自动过期。
+- POST `?op=publish&title=书名`：长期上传专用密钥，仅允许新增书籍，最大 20 MiB。不能用于列表、下载、删除或签发凭证。
+- POST `?op=revoke-publisher`：电脑管理密钥，JSON keyId，撤销指定上传专用密钥。
 
 手机 Work 使用 `https://medo-imy.pages.dev/api/kbooks?op=redeem`，不依赖原域名的 Access 浏览器登录。
 该入口仍由应用层临时凭证鉴权；meDo 原域名的 Access 配置不变。

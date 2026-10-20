@@ -25,23 +25,26 @@ async function initialize(db) {
       PRIMARY KEY (device, book_id))`),
     db.prepare(`CREATE TABLE IF NOT EXISTS kbook_upload_tickets (
       token_hash TEXT PRIMARY KEY, title TEXT NOT NULL, expires_at INTEGER NOT NULL,
-      max_bytes INTEGER NOT NULL, book_id TEXT)`)
+      max_bytes INTEGER NOT NULL, book_id TEXT)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS kbook_publishers (
+      token_hash TEXT PRIMARY KEY, label TEXT NOT NULL, created_at INTEGER NOT NULL,
+      revoked INTEGER NOT NULL DEFAULT 0)`)
   ]);
 }
 
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   const op = url.searchParams.get('op') || 'list';
-  if (!['list', 'upload', 'file', 'ack', 'meta', 'delete', 'ticket', 'redeem'].includes(op)) return response('Unknown operation', 400);
+  if (!['list', 'upload', 'file', 'ack', 'meta', 'delete', 'ticket', 'redeem', 'publisher', 'revoke-publisher', 'publish'].includes(op)) return response('Unknown operation', 400);
   const bearer = request.headers.get('Authorization') || '';
-  if (op === 'redeem') {
+  if (op === 'redeem' || op === 'publish') {
     if (!/^Bearer [a-f0-9]{64}$/.test(bearer)) return response('Unauthorized', 401);
   } else {
-    const secret = ['upload', 'delete', 'ticket'].includes(op) ? env.KBOOK_UPLOAD_TOKEN : env.KCLIP_TOKEN;
+    const secret = ['upload', 'delete', 'ticket', 'publisher', 'revoke-publisher'].includes(op) ? env.KBOOK_UPLOAD_TOKEN : env.KCLIP_TOKEN;
     if (!secret || secret.length < 32) return response('Server token not configured', 503);
     if (bearer !== `Bearer ${secret}`) return response('Unauthorized', 401);
   }
-  const method = op === 'delete' ? 'DELETE' : ['upload', 'ack', 'ticket', 'redeem'].includes(op) ? 'POST' : 'GET';
+  const method = op === 'delete' ? 'DELETE' : ['upload', 'ack', 'ticket', 'redeem', 'publisher', 'revoke-publisher', 'publish'].includes(op) ? 'POST' : 'GET';
   if (request.method !== method) return response(`${method} required`, 405);
   if (!env.KINDLE_BOOKS || !env.TODO_DB) return response('Storage binding missing', 503);
   const device = url.searchParams.get('device');
@@ -50,6 +53,29 @@ export async function onRequest({ request, env }) {
   if (['file', 'ack', 'meta', 'delete'].includes(op) && !idOK(id)) return response('Invalid book ID', 400);
   try {
     await initialize(env.TODO_DB);
+    if (op === 'publisher') {
+      let input;
+      try { input = await request.json(); } catch { return response('Expected JSON label', 400); }
+      const label = typeof input?.label === 'string' ? input.label.trim() : '';
+      if (!label || label.length > 100 || /[\x00-\x1f\x7f]/.test(label)) return response('Invalid label', 400);
+      const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
+      const tokenHash = await sha256(new TextEncoder().encode(token));
+      await env.TODO_DB.prepare('INSERT INTO kbook_publishers (token_hash, label, created_at) VALUES (?, ?, ?)')
+        .bind(tokenHash, label, Date.now()).run();
+      return response(JSON.stringify({ mode: 'publisher', token, keyId: tokenHash, label, maxBytes: MAX_BYTES }), 200, 'application/json; charset=utf-8');
+    }
+    if (op === 'revoke-publisher') {
+      let input;
+      try { input = await request.json(); } catch { return response('Expected JSON keyId', 400); }
+      if (!idOK(input?.keyId)) return response('Invalid key ID', 400);
+      await env.TODO_DB.prepare('UPDATE kbook_publishers SET revoked = 1 WHERE token_hash = ?').bind(input.keyId).run();
+      return response('REVOKED');
+    }
+    if (op === 'publish') {
+      const tokenHash = await sha256(new TextEncoder().encode(bearer.slice(7)));
+      const publisher = await env.TODO_DB.prepare('SELECT token_hash FROM kbook_publishers WHERE token_hash = ? AND revoked = 0').bind(tokenHash).first();
+      if (!publisher) return response('Unauthorized', 401);
+    }
     if (op === 'ticket') {
       let input;
       try { input = await request.json(); } catch { return response('Expected JSON title', 400); }
@@ -80,8 +106,9 @@ export async function onRequest({ request, env }) {
       ]);
       return response(`DELETED ${id}`);
     }
-    if (op === 'upload' || op === 'redeem') {
-      const title = ticket ? ticket.title : (url.searchParams.get('title') || '').trim();
+    if (op === 'upload' || op === 'redeem' || op === 'publish') {
+      let title = ticket ? ticket.title : (url.searchParams.get('title') || '').trim();
+      if (op === 'publish' && title) title = 'Kclip-' + title.replace(/^(?:Kclip-)+/i, '');
       const maxBytes = ticket ? ticket.max_bytes : MAX_BYTES;
       if (!title || title.length > 240 || /[\x00-\x1f\x7f]/.test(title)) return response('Invalid title', 400);
       if (Number(request.headers.get('Content-Length')) > maxBytes) return response('File exceeds upload size limit', 413);
