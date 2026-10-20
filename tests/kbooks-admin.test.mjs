@@ -13,8 +13,9 @@ const origin = 'https://medo.ganlei.com';
 const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
 const jwk = { ...await crypto.subtle.exportKey('jwk', pair.publicKey), kid: 'test-key' };
 const actualFetch = globalThis.fetch;
-globalThis.fetch = async url => {
+globalThis.fetch = async (url, options) => {
   assert.equal(url, `${issuer}/cdn-cgi/access/certs`);
+  assert.equal(options.redirect, 'manual');
   return Response.json({ keys: [jwk] });
 };
 const b64 = value => Buffer.from(JSON.stringify(value)).toString('base64url');
