@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="./public/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="./public/favicon-16.png">
   <link rel="apple-touch-icon" href="./public/apple-touch-icon.png">
-  <link rel="stylesheet" href="./src/styles/app.css?v=20261018a">
+  <link rel="stylesheet" href="./src/styles/app.css?v=20261020a">
 </head>
 <body>
   <main class="app-shell">
@@ -20,7 +20,6 @@
         <p class="subtitle">给任务贴标签，拖动排序；离线可用，在线同步。</p>
       </div>
 
-      <a href="/books.html" style="color:var(--muted,#8b949e);font-size:13px;white-space:nowrap">Kclip 书库 ↗</a>
       <label class="theme-control">
         <span>主题</span>
         <select id="themeSelect" aria-label="选择主题"></select>
@@ -72,7 +71,7 @@
     <ol class="list" id="todoList"></ol>
     <div class="empty" id="emptyState">暂无任务。</div>
 
-    <footer class="app-version" aria-label="当前版本">meDo v2026.10.18.1</footer>
+    <footer class="app-version" aria-label="版本与书库"><span>meDo v2026.10.18.1</span><a href="/books">kclip</a></footer>
   </main>
 
   <template id="todoItemTemplate">

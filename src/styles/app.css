@@ -590,12 +590,25 @@ button.tag-filter.active {
 }
 
 .app-version {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 8px 0 2px;
   color: color-mix(in srgb, var(--muted, #8b949e), transparent 18%);
   font-size: 11px;
   letter-spacing: .04em;
-  text-align: center;
+  text-align: left;
   user-select: none;
+}
+
+.app-version a {
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+}
+
+.app-version a:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 620px) {
