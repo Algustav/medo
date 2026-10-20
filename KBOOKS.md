@@ -14,6 +14,14 @@ Pages 生产环境另设密钥 `KBOOK_UPLOAD_TOKEN`：至少 32 位随机字符�
 - GET `?op=meta&id=SHA256`：书籍标题、大小、安全文件名，用于已有文件整理。
 - GET `?op=file&id=SHA256`：文件流。
 - POST `?op=ack&device=oasis3&id=SHA256`：需 `X-Book-SHA256` 同值，返回 `OK SHA256`。
+- DELETE `?op=delete&id=SHA256`：只接受电脑上传密钥，删除该 ID 的 R2 文件、D1 书单及所有设备领取记录；重复请求安全。
+- POST `?op=ticket`：电脑上传密钥，JSON `{ "title": "书名" }`，签发 30 分钟、最大 5 MiB 的单书临时凭证；原始凭证仅返回一次，D1 仅保存 SHA256。
+- POST `?op=redeem`：以临时凭证作为 Bearer，发送 AZW3 原始字节。凭证原子绑定首个有效文件的 SHA256，相同文件在有效期内可重试，其他文件拒绝；不可查询、删除或签发凭证。
+
+手机 Work 使用 `https://medo-imy.pages.dev/api/kbooks?op=redeem`，不依赖原域名的 Access 浏览器登录。
+该入口仍由应用层临时凭证鉴权；meDo 原域名的 Access 配置不变。
+电脑的 create-upload-ticket.py 签发凭证文件，手机用 mobile-upload.py 上传。
+不要将主密钥、Access 服务凭证或本机 config.json 一起传给手机；临时凭证也不要放进 skill 或 Git。
 
 所有请求使用 Bearer 密钥及现有 Access 服务凭证。上传使用内容寻址，重复文件不重复入队；
 先写 R2 后登记 D1，失败可重试。回执按设备独立记录。已领取后不会因 Kindle 删除文件自动重发。
