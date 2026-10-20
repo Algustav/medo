@@ -10,20 +10,22 @@ const json = (value, status = 200) => new Response(JSON.stringify(value), {
 });
 const decode = value => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 
-export async function authenticated(request) {
+export async function authenticated(request, report = () => {}) {
+  const fail = reason => { report(reason); return false; };
   const token = request.headers.get('Cf-Access-Jwt-Assertion');
-  if (!token || token.length > 16384) return false;
+  if (!token || token.length > 16384) return fail('missing_assertion');
   try {
     const parts = token.split('.');
-    if (parts.length !== 3) return false;
+    if (parts.length !== 3) return fail('malformed_token');
     const header = JSON.parse(new TextDecoder().decode(decode(parts[0])));
     const claims = JSON.parse(new TextDecoder().decode(decode(parts[1])));
     const now = Date.now() / 1000;
-    if (header.alg !== 'RS256' || typeof header.kid !== 'string' || claims.iss !== ISSUER ||
-        !(Array.isArray(claims.aud) ? claims.aud : [claims.aud]).includes(AUDIENCE) ||
-        typeof claims.exp !== 'number' || claims.exp <= now ||
-        (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || claims.nbf > now)) ||
-        typeof claims.email !== 'string' || !claims.email.includes('@')) return false;
+    if (header.alg !== 'RS256' || typeof header.kid !== 'string') return fail('invalid_algorithm');
+    if (claims.iss !== ISSUER) return fail('wrong_issuer');
+    if (!(Array.isArray(claims.aud) ? claims.aud : [claims.aud]).includes(AUDIENCE)) return fail('wrong_application');
+    if (typeof claims.exp !== 'number' || claims.exp <= now ||
+        (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || claims.nbf > now))) return fail('expired_token');
+    if (typeof claims.email !== 'string' || !claims.email.includes('@')) return fail('human_login_required');
     if (!cachedKeys || cachedKeys.expires < Date.now() || !cachedKeys.keys.some(k => k.kid === header.kid)) {
       const response = await fetch(`${ISSUER}/cdn-cgi/access/certs`, { redirect: 'error', signal: AbortSignal.timeout(10000) });
       if (!response.ok) throw new Error('Access keys unavailable');
@@ -32,15 +34,20 @@ export async function authenticated(request) {
       cachedKeys = { keys, expires: Date.now() + 300000 };
     }
     const jwk = cachedKeys.keys.find(k => k.kid === header.kid && k.kty === 'RSA');
-    if (!jwk) return false;
+    if (!jwk) return fail('unknown_signing_key');
     const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-    return await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, decode(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
-  } catch { return false; }
+    const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, decode(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
+    return valid || fail('invalid_signature');
+  } catch { return fail('verification_unavailable'); }
 }
 
 export async function onRequest({ request, env }) {
   if (new URL(request.url).origin !== ORIGIN) return json({ error: '请通过 medo.ganlei.com 访问管理页面。' }, 403);
-  if (!await authenticated(request)) return json({ error: '登录已失效，请刷新页面重新登录 Zero Trust。' }, 401);
+  let reason;
+  if (!await authenticated(request, value => { reason = value; })) {
+    console.warn('kbooks-admin access denied', reason);
+    return json({ error: reason === 'human_login_required' ? '请使用 Zero Trust 邮箱登录管理书库。' : '登录验证失败，请刷新页面重新登录 Zero Trust。', reason }, 401);
+  }
   const url = new URL(request.url);
   const op = url.searchParams.get('op') || 'list';
   const methods = { list: 'GET', upload: 'POST', delete: 'DELETE' };

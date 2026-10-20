@@ -15,7 +15,7 @@ async function request(url, options = {}) {
   const type = response.headers.get('content-type') || '';
   const data = type.includes('application/json') ? await response.json() : await response.text();
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) throw new Error('登录已失效或无访问权限，请刷新页面重新登录。');
+    if (response.status === 401 || response.status === 403) throw new Error(data.error || '登录已失效或无访问权限，请刷新页面重新登录。');
     throw new Error(data.error || (typeof data === 'string' && data.length < 250 ? data : `操作失败（${response.status}），请稍后重试。`));
   }
   if (!type.includes('application/json') && response.status === 200 && /^\s*</.test(data)) throw new Error('登录已失效，请刷新页面重新登录。');
