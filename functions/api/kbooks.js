@@ -4,7 +4,7 @@ const response = (body, status = 200, type = 'text/plain; charset=utf-8') =>
 const deviceOK = value => /^[A-Za-z0-9_-]{1,64}$/.test(value || '');
 const idOK = value => /^[a-f0-9]{64}$/.test(value || '');
 const sha256 = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
-export function bookFilename(title, id) {
+export function bookFilename(title, id, format = 'azw3') {
   const clean = title.normalize('NFC').replace(/[<>:"/\\|?*\x00-\x1f\x7f]/g, '_').replace(/[. ]+$/g, '').replace(/^[. ]+/g, '') || 'Book';
   let stem = '';
   for (const char of clean) {
@@ -12,7 +12,7 @@ export function bookFilename(title, id) {
     stem += char;
   }
   stem = stem.replace(/^(?:Kclip-)+/i, '');
-  return `Kclip-${stem} [${id.slice(0, 8)}].azw3`;
+  return `Kclip-${stem} [${id.slice(0, 8)}].${format === 'pdf' ? 'pdf' : 'azw3'}`;
 }
 
 export async function initialize(db) {
@@ -20,6 +20,7 @@ export async function initialize(db) {
     db.prepare(`CREATE TABLE IF NOT EXISTS kbooks (
       id TEXT PRIMARY KEY, title TEXT NOT NULL, size INTEGER NOT NULL,
       created_at INTEGER NOT NULL)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS kbook_formats (book_id TEXT PRIMARY KEY, format TEXT NOT NULL)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS kbook_receipts (
       device TEXT NOT NULL, book_id TEXT NOT NULL, received_at INTEGER NOT NULL,
       PRIMARY KEY (device, book_id))`),
@@ -35,22 +36,22 @@ export async function initialize(db) {
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   const op = url.searchParams.get('op') || 'list';
-  if (!['list', 'upload', 'file', 'ack', 'meta', 'delete', 'ticket', 'redeem', 'publisher', 'revoke-publisher', 'publish'].includes(op)) return response('Unknown operation', 400);
+  if (!['list', 'upload', 'file', 'ack', 'meta', 'delete', 'requeue', 'ticket', 'redeem', 'publisher', 'revoke-publisher', 'publish'].includes(op)) return response('Unknown operation', 400);
   const bearer = request.headers.get('Authorization') || '';
   if (op === 'redeem' || op === 'publish') {
     if (!/^Bearer [a-f0-9]{64}$/.test(bearer)) return response('Unauthorized', 401);
   } else {
-    const secret = ['upload', 'delete', 'ticket', 'publisher', 'revoke-publisher'].includes(op) ? env.KBOOK_UPLOAD_TOKEN : env.KCLIP_TOKEN;
+    const secret = ['upload', 'delete', 'requeue', 'ticket', 'publisher', 'revoke-publisher'].includes(op) ? env.KBOOK_UPLOAD_TOKEN : env.KCLIP_TOKEN;
     if (!secret || secret.length < 32) return response('Server token not configured', 503);
     if (bearer !== `Bearer ${secret}`) return response('Unauthorized', 401);
   }
-  const method = op === 'delete' ? 'DELETE' : ['upload', 'ack', 'ticket', 'redeem', 'publisher', 'revoke-publisher', 'publish'].includes(op) ? 'POST' : 'GET';
+  const method = op === 'delete' ? 'DELETE' : ['upload', 'requeue', 'ack', 'ticket', 'redeem', 'publisher', 'revoke-publisher', 'publish'].includes(op) ? 'POST' : 'GET';
   if (request.method !== method) return response(`${method} required`, 405);
   if (!env.KINDLE_BOOKS || !env.TODO_DB) return response('Storage binding missing', 503);
   const device = url.searchParams.get('device');
   const id = url.searchParams.get('id');
   if ((op === 'list' || op === 'ack') && !deviceOK(device)) return response('Invalid device', 400);
-  if (['file', 'ack', 'meta', 'delete'].includes(op) && !idOK(id)) return response('Invalid book ID', 400);
+  if (['file', 'ack', 'meta', 'delete', 'requeue'].includes(op) && !idOK(id)) return response('Invalid book ID', 400);
   try {
     await initialize(env.TODO_DB);
     if (op === 'publisher') {
@@ -97,12 +98,20 @@ export async function onRequest({ request, env }) {
       if (!ticket) return response('Unauthorized', 401);
       if (ticket.expires_at <= Date.now()) return response('Upload ticket expired', 410);
     }
+    if (op === 'requeue') {
+      const book = await env.TODO_DB.prepare('SELECT id FROM kbooks WHERE id = ?').bind(id).first();
+      if (!book) return response('Book not found', 404);
+      await env.TODO_DB.prepare('DELETE FROM kbook_receipts WHERE book_id = ?').bind(id).run();
+      return response(JSON.stringify({ id, queued: true }), 200, 'application/json; charset=utf-8');
+    }
     if (op === 'delete') {
       // Retryable even if a previous attempt deleted R2 but failed before D1.
-      await env.KINDLE_BOOKS.delete(`${id}.azw3`);
+      const stored = await env.TODO_DB.prepare('SELECT format FROM kbook_formats WHERE book_id = ?').bind(id).first();
+      await env.KINDLE_BOOKS.delete(`${id}.${stored?.format === 'pdf' ? 'pdf' : 'azw3'}`);
       await env.TODO_DB.batch([
         env.TODO_DB.prepare('DELETE FROM kbook_receipts WHERE book_id = ?').bind(id),
-        env.TODO_DB.prepare('DELETE FROM kbooks WHERE id = ?').bind(id)
+        env.TODO_DB.prepare('DELETE FROM kbooks WHERE id = ?').bind(id),
+        env.TODO_DB.prepare('DELETE FROM kbook_formats WHERE book_id = ?').bind(id)
       ]);
       return response(`DELETED ${id}`);
     }
@@ -125,7 +134,11 @@ export async function onRequest({ request, env }) {
       const bytes = new Uint8Array(size); let offset = 0;
       for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
       // AZW3 uses the Palm database BOOK/MOBI signature; this is a format sanity check.
-      if (size < 78 || new TextDecoder().decode(bytes.subarray(60, 68)) !== 'BOOKMOBI') return response('Expected AZW3/MOBI container', 400);
+      const text = new TextDecoder();
+      const pdf = /^%PDF-[12]\.[0-9]/.test(text.decode(bytes.subarray(0, 8))) && text.decode(bytes.subarray(Math.max(0, size - 2048))).includes('%%EOF');
+      const azw3 = size >= 78 && text.decode(bytes.subarray(60, 68)) === 'BOOKMOBI';
+      if (size < 78 || (!pdf && !azw3)) return response('Expected AZW3 or PDF file', 400);
+      const format = pdf ? 'pdf' : 'azw3';
       const hash = await sha256(bytes);
       if (ticket) {
         // Atomically bind the credential to one content hash before writing R2.
@@ -136,30 +149,33 @@ export async function onRequest({ request, env }) {
         if (!claimed) return response('Ticket expired or already bound to a different book', 409);
       }
       // A content address makes retries safe, including a failed DB write after R2 succeeds.
-      await env.KINDLE_BOOKS.put(`${hash}.azw3`, bytes, { httpMetadata: { contentType: 'application/octet-stream' } });
-      await env.TODO_DB.prepare('INSERT OR IGNORE INTO kbooks (id, title, size, created_at) VALUES (?, ?, ?, ?)')
-        .bind(hash, title, size, Date.now()).run();
-      return response(JSON.stringify({ id: hash, title, size, queued: true }), 200, 'application/json; charset=utf-8');
+      await env.KINDLE_BOOKS.put(`${hash}.${format}`, bytes, { httpMetadata: { contentType: 'application/octet-stream' } });
+      await env.TODO_DB.batch([
+        env.TODO_DB.prepare('INSERT OR IGNORE INTO kbooks (id, title, size, created_at) VALUES (?, ?, ?, ?)').bind(hash, title, size, Date.now()),
+        env.TODO_DB.prepare('INSERT OR IGNORE INTO kbook_formats (book_id, format) VALUES (?, ?)').bind(hash, format)
+      ]);
+      return response(JSON.stringify({ id: hash, title, size, format, queued: true }), 200, 'application/json; charset=utf-8');
     }
     if (op === 'list') {
-      const rows = await env.TODO_DB.prepare(`SELECT b.id, b.size, b.title FROM kbooks b
+      const rows = await env.TODO_DB.prepare(`SELECT b.id, b.size, b.title, COALESCE(f.format, 'azw3') AS format FROM kbooks b LEFT JOIN kbook_formats f ON f.book_id = b.id
         WHERE NOT EXISTS (SELECT 1 FROM kbook_receipts r WHERE r.book_id = b.id AND r.device = ?)
-        ORDER BY b.created_at, b.id LIMIT 100`).bind(device).all();
+        AND (? = '2' OR COALESCE(f.format, 'azw3') = 'azw3')
+        ORDER BY b.created_at, b.id LIMIT 100`).bind(device, url.searchParams.get('format')).all();
       if (url.searchParams.get('format') === '2') {
         return response(`KBOOKS2\t${Math.floor(Date.now() / 1000)}\n` + rows.results.map(row =>
-          `${row.id}\t${row.size}\t${bookFilename(row.title, row.id)}\n`).join(''));
+          `${row.id}\t${row.size}\t${bookFilename(row.title, row.id, row.format)}\n`).join(''));
       }
       return response('KBOOKS1\n' + rows.results.map(row => `${row.id}\t${row.size}\n`).join(''));
     }
-    const book = await env.TODO_DB.prepare('SELECT id, title, size FROM kbooks WHERE id = ?').bind(id).first();
+    const book = await env.TODO_DB.prepare("SELECT b.id, b.title, b.size, COALESCE(f.format, 'azw3') AS format FROM kbooks b LEFT JOIN kbook_formats f ON f.book_id = b.id WHERE b.id = ?").bind(id).first();
     if (!book) return response('Book not found', 404);
-    if (op === 'meta') return response(JSON.stringify({ ...book, filename: bookFilename(book.title, book.id) }), 200, 'application/json; charset=utf-8');
+    if (op === 'meta') return response(JSON.stringify({ ...book, filename: bookFilename(book.title, book.id, book.format) }), 200, 'application/json; charset=utf-8');
     if (op === 'file') {
-      const object = await env.KINDLE_BOOKS.get(`${id}.azw3`);
+      const object = await env.KINDLE_BOOKS.get(`${id}.${book.format}`);
       if (!object) return response('File missing', 404);
       return new Response(object.body, { headers: { 'Content-Type': 'application/octet-stream',
         'Content-Length': String(book.size), 'Cache-Control': 'no-store',
-        'Content-Disposition': `attachment; filename="${id}.azw3"` } });
+        'Content-Disposition': `attachment; filename="${id}.${book.format}"` } });
     }
     if (request.headers.get('X-Book-SHA256') !== id) return response('Checksum confirmation required', 400);
     await env.TODO_DB.prepare('INSERT OR IGNORE INTO kbook_receipts (device, book_id, received_at) VALUES (?, ?, ?)')

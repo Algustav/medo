@@ -37,12 +37,16 @@ function render() {
     const info = document.createElement('div'); info.className = 'book-info';
     const title = document.createElement('div'); title.className = 'book-title'; title.textContent = book.title;
     const meta = document.createElement('div'); meta.className = 'book-meta';
-    for (const text of [size(book.size), date(book.created_at)]) { const span = document.createElement('span'); span.textContent = text; meta.append(span); }
+    for (const text of [(book.format || 'azw3').toUpperCase(), size(book.size), date(book.created_at)]) { const span = document.createElement('span'); span.textContent = text; meta.append(span); }
     const state = document.createElement('span'); state.className = 'book-state'; state.textContent = book.received_count ? `已被 ${book.received_count} 台设备下载` : '等待 Kindle 下载'; meta.append(state);
     info.append(title, meta);
     const button = document.createElement('button'); button.type = 'button'; button.className = 'delete-button'; button.textContent = '删除'; button.disabled = busy;
     button.setAttribute('aria-label', `删除 ${book.title}`); button.addEventListener('click', () => confirmDelete(book));
-    row.append(info, button); $('books').append(row);
+    const actions = document.createElement('div'); actions.className = 'book-actions';
+    const resend = document.createElement('button'); resend.type = 'button'; resend.className = 'requeue-button'; resend.textContent = '重新推送'; resend.disabled = busy;
+    resend.setAttribute('aria-label', `重新推送 ${book.title}`); resend.addEventListener('click', () => requeue(book));
+    actions.append(resend, button);
+    row.append(info, actions); $('books').append(row);
   }
 }
 function setBusy(value) {
@@ -61,8 +65,8 @@ async function load() {
 }
 function selectFile() {
   const file = $('bookFile').files[0];
-  $('fileName').textContent = file ? `${file.name} · ${size(file.size)}` : '选择 AZW3 文件';
-  if (file) $('bookTitle').value = file.name.replace(/\.azw3$/i, '').replace(/^(?:Kclip-)+/i, '').replace(/ \[[a-f0-9]{8}\]$/i, '').slice(0, 234);
+  $('fileName').textContent = file ? `${file.name} · ${size(file.size)}` : '选择 AZW3 或 PDF 文件';
+  if (file) $('bookTitle').value = file.name.replace(/\.(azw3|pdf)$/i, '').replace(/^(?:Kclip-)+/i, '').replace(/ \[[a-f0-9]{8}\]$/i, '').slice(0, 234);
 }
 $('bookFile').addEventListener('change', selectFile);
 $('search').addEventListener('input', render);
@@ -77,8 +81,8 @@ $('dropZone').addEventListener('drop', e => {
 $('uploadForm').addEventListener('submit', async e => {
   e.preventDefault(); if (busy) return;
   const file = $('bookFile').files[0]; const title = $('bookTitle').value.trim();
-  if (!file || !/\.azw3$/i.test(file.name)) return message('请选择 AZW3 文件。', true);
-  if (file.size > 20 * 1024 * 1024 || file.size < 78) return message('请选择有效的 AZW3，文件不能超过 20 MB。', true);
+  if (!file || !/\.(azw3|pdf)$/i.test(file.name)) return message('请选择 AZW3 或 PDF 文件。', true);
+  if (file.size > 20 * 1024 * 1024 || file.size < 78) return message('请选择有效的 AZW3 或 PDF，文件不能超过 20 MB。', true);
   if (!title) return message('请填写书单标题。', true);
   setBusy(true); $('uploadButton').textContent = '正在上传…'; message('正在上传，请保持页面打开。');
   try {
@@ -89,6 +93,16 @@ $('uploadForm').addEventListener('submit', async e => {
   } catch (e) { message(`上传未完成：${e.message} 可以重试，相同文件不会重复入库。`, true); }
   finally { setBusy(false); $('uploadButton').textContent = '上传到书库 ↑'; }
 });
+async function requeue(book) {
+  if (busy) return;
+  setBusy(true); message('正在重新推送…');
+  try {
+    await request(`${api}?op=requeue&id=${encodeURIComponent(book.id)}`, { method: 'POST' });
+    book.received_count = 0;
+    message(`《${book.title}》已重新加入所有设备的待下载书单。请在 Kindle 上点击“下载 R2 书籍”；本地已有的完整文件会校验后复用。`);
+  } catch (e) { message(`重新推送未完成：${e.message}`, true); }
+  finally { setBusy(false); }
+}
 async function confirmDelete(book) {
   if (busy) return;
   const dialog = $('deleteDialog'); $('deleteTitle').textContent = book.title;

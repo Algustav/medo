@@ -62,7 +62,7 @@ export async function onRequest({ request, env }) {
   }
   const url = new URL(request.url);
   const op = url.searchParams.get('op') || 'list';
-  const methods = { list: 'GET', upload: 'POST', delete: 'DELETE' };
+  const methods = { list: 'GET', upload: 'POST', delete: 'DELETE', requeue: 'POST' };
   if (!methods[op]) return json({ error: '不支持的操作。' }, 400);
   if (request.method !== methods[op]) return json({ error: '请求方式不正确。' }, 405);
   if (request.method !== 'GET' && request.headers.get('Origin') !== ORIGIN) return json({ error: '请求来源不正确，请刷新页面。' }, 403);
@@ -70,14 +70,14 @@ export async function onRequest({ request, env }) {
   try {
     if (op === 'list') {
       await initialize(env.TODO_DB);
-      const result = await env.TODO_DB.prepare(`SELECT b.id, b.title, b.size, b.created_at,
-        COUNT(r.book_id) AS received_count FROM kbooks b LEFT JOIN kbook_receipts r ON r.book_id = b.id
+      const result = await env.TODO_DB.prepare(`SELECT b.id, b.title, b.size, b.created_at, COALESCE(f.format, 'azw3') AS format,
+        COUNT(r.book_id) AS received_count FROM kbooks b LEFT JOIN kbook_formats f ON f.book_id = b.id LEFT JOIN kbook_receipts r ON r.book_id = b.id
         GROUP BY b.id ORDER BY b.created_at DESC, b.id`).all();
       return json({ books: result.results || [] });
     }
     const target = new URL('/api/kbooks', ORIGIN);
     target.searchParams.set('op', op);
-    if (op === 'delete') target.searchParams.set('id', url.searchParams.get('id') || '');
+    if (op === 'delete' || op === 'requeue') target.searchParams.set('id', url.searchParams.get('id') || '');
     if (op === 'upload') {
       const title = (url.searchParams.get('title') || '').trim().replace(/^(?:Kclip-)+/i, '');
       target.searchParams.set('title', title ? `Kclip-${title}` : '');

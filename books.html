@@ -8,7 +8,7 @@
   <title>书库 · meDo</title>
   <link rel="icon" href="/public/favicon.ico">
   <link rel="stylesheet" href="/src/styles/app.css?v=20261018a">
-  <link rel="stylesheet" href="/src/styles/books.css?v=1">
+  <link rel="stylesheet" href="/src/styles/books.css?v=20261022">
 </head>
 <body>
   <main class="app-shell books-shell">
@@ -17,9 +17,9 @@
       <div><p class="eyebrow">KCLIP LIBRARY</p><h1>Kclip 书库</h1><p class="subtitle">上传到书库，再从 Kindle 的 Kclip 菜单下载。</p></div>
     </header>
     <section class="upload-panel" aria-labelledby="uploadHeading">
-      <div class="panel-heading"><h2 id="uploadHeading">添加一本书</h2><span>AZW3 · 最大 20 MB</span></div>
+      <div class="panel-heading"><h2 id="uploadHeading">添加一本书</h2><span>AZW3 / PDF · 最大 20 MB</span></div>
       <form id="uploadForm">
-        <label class="file-picker" id="dropZone"><input id="bookFile" type="file" accept=".azw3" required><span class="file-icon" aria-hidden="true">＋</span><strong id="fileName">选择 AZW3 文件</strong><span>也可以拖到这里；手机上轻点选择文件。</span></label>
+        <label class="file-picker" id="dropZone"><input id="bookFile" type="file" accept=".azw3,.pdf" required><span class="file-icon" aria-hidden="true">＋</span><strong id="fileName">选择 AZW3 或 PDF 文件</strong><span>也可以拖到这里；手机上轻点选择文件。</span></label>
         <div class="upload-fields"><label for="bookTitle">书单标题<input id="bookTitle" maxlength="234" placeholder="例如：李录投资笔记" required></label><button class="primary" id="uploadButton" type="submit">上传到书库 ↑</button></div>
         <p class="hint">自动加上 Kclip- 前缀。Kindle 图书馆显示的是书内标题，上传不会修改书内信息。</p>
       </form>
@@ -33,6 +33,6 @@
     </section>
     <dialog id="deleteDialog"><form method="dialog"><p class="eyebrow">删除书籍</p><h2>从云端书库移除？</h2><p id="deleteTitle"></p><p class="hint">云端文件和下载记录将被永久删除，Kindle 上已有的文件会保留。</p><div class="dialog-actions"><button value="cancel">取消</button><button class="danger" id="confirmDelete" value="delete">确认删除</button></div></form></dialog>
   </main>
-  <script type="module" src="/src/books.js?v=1"></script>
+  <script type="module" src="/src/books.js?v=20261022"></script>
 </body>
 </html>

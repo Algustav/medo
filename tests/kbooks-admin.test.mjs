@@ -70,6 +70,10 @@ test('admin upload, inventory, receipt count, deduplication and deletion use the
   s.sql.prepare('INSERT INTO kbook_receipts VALUES (?, ?, ?)').run('oasis3', book.id, Date.now());
   const inventory = await (await s.call()).json();
   assert.equal(inventory.books.length, 1); assert.equal(inventory.books[0].received_count, 1);
+  assert.equal((await s.call('op=requeue&id=' + book.id, { method: 'POST', headers: { Origin: 'https://attacker.example' } })).status, 403);
+  assert.equal((await s.call('op=requeue&id=' + book.id, { method: 'POST' })).status, 200);
+  assert.equal((await (await s.call()).json()).books[0].received_count, 0);
+  assert.equal(s.objects.size, 1);
   await s.call('op=upload&title=again', { method: 'POST', body: s.bytes });
   assert.equal((await (await s.call()).json()).books.length, 1);
   assert.equal((await s.call('op=delete&id=' + book.id, { method: 'DELETE' })).status, 200);
@@ -85,3 +89,14 @@ test('invalid book, size, title and storage failures do not report success', asy
   assert.equal((await s.call('op=upload&title=x', { method: 'POST', body: s.bytes })).status, 503);
 });
 test.after(() => { globalThis.fetch = actualFetch; });
+
+test('web admin accepts PDF and reports its format without changing old AZW3 files', async () => {
+  const s = setup();
+  const pdf = new TextEncoder().encode('%PDF-1.7\n' + 'content '.repeat(20) + '\n%%EOF');
+  const response = await s.call('op=upload&title=PDF', { method: 'POST', body: pdf });
+  assert.equal(response.status, 200);
+  const book = await response.json(); assert.equal(book.format, 'pdf');
+  assert.ok(s.objects.has(`${book.id}.pdf`));
+  assert.equal((await (await s.call()).json()).books[0].format, 'pdf');
+  assert.equal((await s.call('op=requeue&id=' + '0'.repeat(64), { method: 'POST' })).status, 404);
+});
